@@ -1,0 +1,45 @@
+# Extend ignore patterns for build artifacts and configs
+__pycache__/
+*.py[cod]
+
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+
+# Virtual environments
+.venv/
+venv/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Mypy cache
+.mypy_cache/
+
+# Logs
+logs/
+*.log
+
+# Alembic
+alembic/versions/
+
+# Migrations
+migrations/
+
+# IDE and system files
+.vscode/
+.idea/
+.DS_Store
+
+# Poetry
+poetry.lock
+
+# Cache directories
+.cache/
+
+# Custom
+merge_code.py
+merged_output.txt

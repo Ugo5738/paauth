@@ -1,0 +1,18 @@
+services:
+  auth_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000" # Exposes auth_service on host port 8000
+    env_file:
+      - .env # Loads environment variables from .env file
+    volumes:
+      - .:/app # Mounts current directory into /app in container for live reload
+    networks:
+      - supabase_project_network
+
+networks:
+  supabase_project_network:
+    name: supabase_network_paauth
+    external: true

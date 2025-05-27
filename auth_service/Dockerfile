@@ -7,8 +7,14 @@ ENV PYTHONUNBUFFERED=1 \
 # Explicitly add /app/src to PYTHONPATH
 ENV PYTHONPATH="${PYTHONPATH}:/app/src"
 
+# Set pip timeout
+ENV PIP_DEFAULT_TIMEOUT=100
+
 # Install Poetry
 RUN pip install --no-cache-dir poetry
+
+# Install build tools
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -17,7 +23,7 @@ COPY pyproject.toml poetry.lock /app/
 
 # Install dependencies
 RUN poetry config virtualenvs.create false \
-    && poetry install --no-root --no-interaction --no-ansi
+    && poetry install --no-root --no-interaction --no-ansi --with dev
 
 # Copy source code
 COPY . /app

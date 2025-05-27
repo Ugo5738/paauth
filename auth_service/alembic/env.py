@@ -11,6 +11,7 @@ from auth_service.models import Permission # Ensure Permission is also imported
 from auth_service.models import UserRole # Ensure UserRole is also imported
 from auth_service.models import AppClientRole # Ensure AppClientRole is also imported
 from auth_service.models import RolePermission # Ensure RolePermission is also imported
+from auth_service.models import AppClientRefreshToken # Ensure AppClientRefreshToken is also imported
 import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine
 

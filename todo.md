@@ -121,8 +121,8 @@ This TODO list breaks down the development of the Auth Service into manageable t
   - [x] 1.7.a: Define SQLAlchemy/SQLModel model for `role_permissions` (`role_id` (FK to `roles.id`), `permission_id` (FK to `permissions.id`), `assigned_at`; composite PK on `role_id`, `permission_id`).
   - [x] 1.7.b: Generate Alembic migration script for `role_permissions` table.
   - [x] 1.7.c: Apply the migration by running inside the container: `docker-compose exec auth_service alembic upgrade head`.
-- [ ] **1.8: (Optional) `refresh_tokens` Table for `app_clients`**
-  - [ ] 1.8.a: If implementing: Define model, generate Alembic migration script, and apply the migration by running inside the container: `docker-compose exec auth_service alembic upgrade head`.
+- [x] **1.8: (Optional) `refresh_tokens` Table for `app_clients`**
+  - [x] 1.8.a: If implementing: Define model, generate Alembic migration script, and apply the migration by running inside the container: `docker-compose exec auth_service alembic upgrade head`.
 
 ## Phase 2: Human User Authentication (Proxying Supabase)
 

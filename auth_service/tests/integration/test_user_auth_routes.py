@@ -10,9 +10,10 @@ from sqlalchemy import text
 from auth_service.main import app  # To access app.dependency_overrides
 from auth_service.routers import user_auth_routes # Added import
 from auth_service.supabase_client import get_supabase_client as real_get_supabase_client
+from auth_service.config import settings as app_config_settings # For monkeypatching
 
 from ..utils import create_mock_supa_session, create_mock_supa_user, create_default_mock_settings
-from auth_service.schemas.user_schemas import UserLoginRequest # Added for login tests
+from auth_service.schemas.user_schemas import UserLoginRequest, MagicLinkLoginRequest, MagicLinkSentResponse, SupabaseUser, PasswordResetRequest # Added for login, magic link, logout, and password reset tests
 from gotrue.errors import AuthApiError # Corrected import for login error tests
 
 
@@ -20,6 +21,7 @@ from gotrue.errors import AuthApiError # Corrected import for login error tests
 async def test_register_user_placeholder(
     async_client: AsyncClient,
     db_session_for_crud: AsyncSession,  # Add database session
+    monkeypatch, # Add monkeypatch
 ):
     """
     Test the placeholder /auth/users/register endpoint.
@@ -67,14 +69,10 @@ async def test_register_user_placeholder(
     original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
     app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
 
-    original_route_settings = user_auth_routes.settings # Store original settings
     try:
-        # Apply mock settings for this test
-        current_mock_settings = create_default_mock_settings()
-        # Ensure email confirmation is required for this placeholder test's expectation
-        current_mock_settings.supabase_email_confirmation_required = True 
-        current_mock_settings.supabase_auto_confirm_new_users = False # Explicitly set for clarity
-        user_auth_routes.settings = current_mock_settings
+        # Apply mock settings for this test using monkeypatch
+        monkeypatch.setattr(app_config_settings, 'supabase_email_confirmation_required', True)
+        monkeypatch.setattr(app_config_settings, 'supabase_auto_confirm_new_users', False)
         response = await async_client.post("/auth/users/register", json=test_user_data)
 
         assert (
@@ -112,12 +110,12 @@ async def test_register_user_placeholder(
             if real_get_supabase_client in app.dependency_overrides:
                 del app.dependency_overrides[real_get_supabase_client]
         # Restore original settings
-        user_auth_routes.settings = original_route_settings
+        # monkeypatch will automatically revert the setattr changes for app_config_settings
 
 
 @pytest.mark.asyncio
 async def test_login_user_successful(
-    async_client: AsyncClient,
+    async_client: AsyncClient, monkeypatch # Ensure monkeypatch is present
 ):
     user_id = uuid4()
     test_login_data = {
@@ -146,10 +144,9 @@ async def test_login_user_successful(
     original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
     app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
 
-    original_route_settings = user_auth_routes.settings
     try:
-        current_mock_settings = create_default_mock_settings()
-        user_auth_routes.settings = current_mock_settings
+        # No specific settings attributes are being changed for this test's logic.
+        # The route will use the global app_config_settings via dependency injection.
 
         response = await async_client.post("/auth/users/login", json=test_login_data)
 
@@ -167,12 +164,12 @@ async def test_login_user_successful(
         else:
             if real_get_supabase_client in app.dependency_overrides:
                 del app.dependency_overrides[real_get_supabase_client]
-        user_auth_routes.settings = original_route_settings
+        # monkeypatch will automatically revert the setattr changes for app_config_settings
 
 
 @pytest.mark.asyncio
 async def test_login_user_invalid_credentials(
-    async_client: AsyncClient,
+    async_client: AsyncClient, monkeypatch
 ):
     test_login_data = {
         "email": "user@example.com",
@@ -193,10 +190,9 @@ async def test_login_user_invalid_credentials(
     original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
     app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
 
-    original_route_settings = user_auth_routes.settings
     try:
-        current_mock_settings = create_default_mock_settings()
-        user_auth_routes.settings = current_mock_settings
+        # No specific settings attributes are being changed for this test's logic.
+        # The route will use the global app_config_settings via dependency injection.
 
         response = await async_client.post("/auth/users/login", json=test_login_data)
 
@@ -210,12 +206,12 @@ async def test_login_user_invalid_credentials(
         else:
             if real_get_supabase_client in app.dependency_overrides:
                 del app.dependency_overrides[real_get_supabase_client]
-        user_auth_routes.settings = original_route_settings
+        # monkeypatch will automatically revert the setattr changes for app_config_settings
 
 
 @pytest.mark.asyncio
 async def test_login_user_not_found(
-    async_client: AsyncClient,
+    async_client: AsyncClient, monkeypatch
 ):
     test_login_data = {
         "email": "nonexistent_user@example.com",
@@ -238,10 +234,9 @@ async def test_login_user_not_found(
     original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
     app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
 
-    original_route_settings = user_auth_routes.settings
     try:
-        current_mock_settings = create_default_mock_settings()
-        user_auth_routes.settings = current_mock_settings
+        # No specific settings attributes are being changed for this test's logic.
+        # The route will use the global app_config_settings via dependency injection.
 
         response = await async_client.post("/auth/users/login", json=test_login_data)
 
@@ -255,12 +250,12 @@ async def test_login_user_not_found(
         else:
             if real_get_supabase_client in app.dependency_overrides:
                 del app.dependency_overrides[real_get_supabase_client]
-        user_auth_routes.settings = original_route_settings
+        # monkeypatch will automatically revert the setattr changes for app_config_settings
 
 
 @pytest.mark.asyncio
 async def test_login_user_email_not_confirmed(
-    async_client: AsyncClient,
+    async_client: AsyncClient, monkeypatch
 ):
     user_id = uuid4()
     test_login_data = {
@@ -284,11 +279,8 @@ async def test_login_user_email_not_confirmed(
     original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
     app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
 
-    original_route_settings = user_auth_routes.settings
     try:
-        current_mock_settings = create_default_mock_settings()
-        current_mock_settings.supabase_email_confirmation_required = True # Ensure this setting is active
-        user_auth_routes.settings = current_mock_settings
+        monkeypatch.setattr(app_config_settings, 'supabase_email_confirmation_required', True)
 
         response = await async_client.post("/auth/users/login", json=test_login_data)
 
@@ -303,4 +295,420 @@ async def test_login_user_email_not_confirmed(
         else:
             if real_get_supabase_client in app.dependency_overrides:
                 del app.dependency_overrides[real_get_supabase_client]
-        user_auth_routes.settings = original_route_settings
+        # monkeypatch will automatically revert the setattr changes for app_config_settings
+
+
+@pytest.mark.asyncio
+async def test_login_magic_link_successful_request(
+    async_client: AsyncClient, monkeypatch
+):
+    test_email = "magic_user@example.com"
+    test_login_data = {"email": test_email}
+
+    mock_supabase_auth = AsyncMock()
+    mock_otp_response = MagicMock()
+    mock_supabase_auth.sign_in_with_otp = AsyncMock(return_value=mock_otp_response)
+
+    mock_supabase_client_instance = AsyncMock()
+    mock_supabase_client_instance.auth = mock_supabase_auth
+
+    async def mock_get_supabase_override():
+        return mock_supabase_client_instance
+
+    original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
+    app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
+
+    try:
+        # No specific settings attributes are being changed for this test's logic.
+        # The route will use the global app_config_settings via dependency injection.
+
+        response = await async_client.post("/auth/users/login/magiclink", json=test_login_data)
+
+        assert response.status_code == status.HTTP_200_OK, f"Response: {response.text}"
+        response_data = response.json()
+        assert response_data["message"] == f"Magic link sent to {test_email}. Please check your inbox."
+        # Ensure options are passed if your Supabase client setup requires them, e.g., for email redirect
+        mock_supabase_auth.sign_in_with_otp.assert_called_once_with({"email": test_email, "options": {}})
+
+    finally:
+        if original_get_supabase:
+            app.dependency_overrides[real_get_supabase_client] = original_get_supabase
+        else:
+            if real_get_supabase_client in app.dependency_overrides:
+                del app.dependency_overrides[real_get_supabase_client]
+        # monkeypatch will automatically revert the setattr changes for app_config_settings
+
+
+@pytest.mark.asyncio
+async def test_login_magic_link_invalid_email_format(
+    async_client: AsyncClient,
+):
+    test_login_data = {"email": "notanemail"}
+
+    response = await async_client.post("/auth/users/login/magiclink", json=test_login_data)
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    response_data = response.json()
+    assert "detail" in response_data
+    assert any(
+        field_error["type"] == "value_error" and field_error["loc"] == ["body", "email"]
+        for field_error in response_data["detail"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_login_magic_link_supabase_api_error(
+    async_client: AsyncClient, monkeypatch
+):
+    test_email = "error_user@example.com"
+    test_login_data = {"email": test_email}
+
+    mock_supabase_auth = AsyncMock()
+    mock_supabase_auth.sign_in_with_otp = AsyncMock(
+        side_effect=AuthApiError(message="Supabase rate limit exceeded", status=429, code="rate_limit_exceeded")
+    )
+
+    mock_supabase_client_instance = AsyncMock()
+    mock_supabase_client_instance.auth = mock_supabase_auth
+
+    async def mock_get_supabase_override():
+        return mock_supabase_client_instance
+
+    original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
+    app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
+
+    try:
+        # No specific settings attributes are being changed for this test's logic.
+        # The route will use the global app_config_settings via dependency injection.
+
+        response = await async_client.post("/auth/users/login/magiclink", json=test_login_data)
+
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS, f"Response: {response.text}"
+        response_data = response.json()
+        assert response_data["detail"] == "Failed to send magic link: Supabase rate limit exceeded"
+
+    finally:
+        if original_get_supabase:
+            app.dependency_overrides[real_get_supabase_client] = original_get_supabase
+        else:
+            if real_get_supabase_client in app.dependency_overrides:
+                del app.dependency_overrides[real_get_supabase_client]
+        # monkeypatch will automatically revert the setattr changes for app_config_settings
+
+
+@pytest.mark.asyncio
+async def test_logout_user_successful(
+    async_client: AsyncClient, monkeypatch
+):
+    user_id = uuid4()
+    login_email = f"logout_user_{user_id.hex[:6]}@example.com"
+    mock_supa_user_instance = create_mock_supa_user(email=login_email, id_val=user_id, confirmed=True)
+    mock_supa_session_instance = create_mock_supa_session(user=mock_supa_user_instance)
+
+    mock_logout_supabase_auth = AsyncMock() # Renamed for clarity
+    # Mock get_user for the dependency check during logout
+    mock_logout_supabase_auth.get_user = AsyncMock(return_value=MagicMock(user=mock_supa_user_instance))
+    # Mock sign_out for the logout call itself
+    mock_logout_supabase_auth.sign_out = AsyncMock(return_value=None) # sign_out usually returns None or raises error
+
+    mock_supabase_client_instance = AsyncMock()
+    mock_supabase_client_instance.auth = mock_logout_supabase_auth
+
+    async def mock_get_supabase_override():
+        return mock_supabase_client_instance
+
+    original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
+    app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
+    try:
+        # No specific settings attributes are being changed for this test's logic.
+        # The route will use the global app_config_settings via dependency injection.
+        
+        mock_token = mock_supa_session_instance.access_token 
+
+        headers = {"Authorization": f"Bearer {mock_token}"}
+        response = await async_client.post("/auth/users/logout", headers=headers)
+
+        assert response.status_code == status.HTTP_200_OK, f"Response: {response.text}"
+        response_data = response.json()
+        assert response_data["message"] == "Successfully logged out"
+        mock_logout_supabase_auth.sign_out.assert_called_once_with(jwt=mock_token)
+
+    finally:
+        if original_get_supabase:
+            app.dependency_overrides[real_get_supabase_client] = original_get_supabase
+        else:
+            if real_get_supabase_client in app.dependency_overrides:
+                del app.dependency_overrides[real_get_supabase_client]
+        # monkeypatch will automatically revert the setattr changes for app_config_settings
+
+
+@pytest.mark.asyncio
+async def test_logout_user_invalid_token_format(
+    async_client: AsyncClient,
+):
+    headers = {"Authorization": "Bearer an_invalid_token_without_proper_structure"}
+    response = await async_client.post("/auth/users/logout", headers=headers)
+    
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED, f"Response: {response.text}"
+    response_data = response.json()
+    assert "Could not validate credentials" in response_data.get("detail", "")
+
+
+@pytest.mark.asyncio
+async def test_logout_user_no_auth_header(
+    async_client: AsyncClient,
+):
+    response = await async_client.post("/auth/users/logout") # No headers
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED, f"Response: {response.text}"
+    response_data = response.json()
+    assert response_data.get("detail") == "Not authenticated" # This is FastAPI's default for OAuth2PasswordBearer
+
+
+@pytest.mark.asyncio
+async def test_logout_user_expired_token(
+    async_client: AsyncClient, monkeypatch
+):
+    expired_token = "a_jwt_that_will_be_treated_as_expired"
+
+    mock_supabase_auth = AsyncMock()
+    mock_supabase_auth.get_user = AsyncMock(
+        side_effect=AuthApiError(message="Token expired", status=401, code="token_expired")
+    )
+
+    mock_supabase_client_instance = AsyncMock()
+    mock_supabase_client_instance.auth = mock_supabase_auth
+
+    async def mock_get_supabase_override():
+        return mock_supabase_client_instance
+
+    original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
+    app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
+    try:
+        # No specific settings attributes are being changed for this test's logic.
+        # The route will use the global app_config_settings via dependency injection.
+
+        headers = {"Authorization": f"Bearer {expired_token}"}
+        response = await async_client.post("/auth/users/logout", headers=headers)
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED, f"Response: {response.text}"
+        response_data = response.json()
+        assert "Invalid or expired token: Token expired" in response_data.get("detail", "")
+
+    finally:
+        if original_get_supabase:
+            app.dependency_overrides[real_get_supabase_client] = original_get_supabase
+        else:
+            if real_get_supabase_client in app.dependency_overrides:
+                del app.dependency_overrides[real_get_supabase_client]
+        # monkeypatch will automatically revert the setattr changes for app_config_settings
+
+
+@pytest.mark.asyncio
+async def test_logout_user_supabase_sign_out_error(
+    async_client: AsyncClient, monkeypatch
+):
+    user_id = uuid4()
+    login_email = f"signout_error_user_{user_id.hex[:6]}@example.com"
+    mock_supa_user_instance = create_mock_supa_user(email=login_email, id_val=user_id, confirmed=True)
+    mock_supa_session_instance = create_mock_supa_session(user=mock_supa_user_instance)
+
+    mock_supabase_auth = AsyncMock()
+    mock_supabase_auth.get_user = AsyncMock(return_value=MagicMock(user=mock_supa_user_instance))
+    mock_supabase_auth.sign_out = AsyncMock(
+        side_effect=AuthApiError(message="Supabase sign_out failed", status=500, code="signout_error")
+    )
+
+    mock_supabase_client_instance = AsyncMock()
+    mock_supabase_client_instance.auth = mock_supabase_auth
+
+    async def mock_get_supabase_override():
+        return mock_supabase_client_instance
+
+    original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
+    app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
+    try:
+        # No specific settings attributes are being changed for this test's logic.
+        # The route will use the global app_config_settings via dependency injection.
+        
+        mock_token = mock_supa_session_instance.access_token
+        headers = {"Authorization": f"Bearer {mock_token}"}
+        response = await async_client.post("/auth/users/logout", headers=headers)
+
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR, f"Response: {response.text}"
+        response_data = response.json()
+        assert "Logout failed: Supabase sign_out failed" in response_data.get("detail", "")
+
+    finally:
+        if original_get_supabase:
+            app.dependency_overrides[real_get_supabase_client] = original_get_supabase
+        else:
+            if real_get_supabase_client in app.dependency_overrides:
+                del app.dependency_overrides[real_get_supabase_client]
+        # monkeypatch will automatically revert the setattr changes for app_config_settings
+
+
+@pytest.mark.asyncio
+async def test_password_reset_request_successful(
+    async_client: AsyncClient, monkeypatch
+):
+    test_email = f"reset_success_{uuid4().hex[:6]}@example.com"
+    request_data = {"email": test_email}
+
+    mock_supabase_auth = AsyncMock()
+    mock_supabase_auth.reset_password_for_email = AsyncMock(return_value=None) # Supabase returns None on success
+
+    mock_supabase_client_instance = AsyncMock()
+    mock_supabase_client_instance.auth = mock_supabase_auth
+
+    async def mock_get_supabase_override():
+        return mock_supabase_client_instance
+
+    original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
+    app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
+    try:
+        # No specific settings attributes are being changed for this test's logic.
+        # The route will use the global app_config_settings via dependency injection.
+
+        response = await async_client.post("/auth/users/password/reset", json=request_data)
+
+        assert response.status_code == status.HTTP_200_OK, f"Response: {response.text}"
+        response_data = response.json()
+        assert response_data["message"] == "If an account with this email exists, a password reset link has been sent."
+        mock_supabase_auth.reset_password_for_email.assert_called_once_with(email=test_email, options={'redirect_to': 'http://localhost:3000/auth/update-password'})
+
+    finally:
+        if original_get_supabase:
+            app.dependency_overrides[real_get_supabase_client] = original_get_supabase
+        else:
+            if real_get_supabase_client in app.dependency_overrides:
+                del app.dependency_overrides[real_get_supabase_client]
+        # monkeypatch will automatically revert the setattr changes for app_config_settings
+
+
+@pytest.mark.asyncio
+async def test_password_reset_request_email_not_found(
+    async_client: AsyncClient, monkeypatch
+):
+    test_email = f"reset_notfound_{uuid4().hex[:6]}@example.com"
+    request_data = {"email": test_email}
+
+    mock_supabase_auth = AsyncMock()
+    mock_supabase_auth.reset_password_for_email = AsyncMock(return_value=None) 
+
+    mock_supabase_client_instance = AsyncMock()
+    mock_supabase_client_instance.auth = mock_supabase_auth
+
+    async def mock_get_supabase_override():
+        return mock_supabase_client_instance
+
+    original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
+    app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
+    try:
+        # No specific settings attributes are being changed for this test's logic.
+        # The route will use the global app_config_settings via dependency injection.
+
+        response = await async_client.post("/auth/users/password/reset", json=request_data)
+
+        assert response.status_code == status.HTTP_200_OK, f"Response: {response.text}"
+        response_data = response.json()
+        assert response_data["message"] == "If an account with this email exists, a password reset link has been sent."
+        mock_supabase_auth.reset_password_for_email.assert_called_once_with(email=test_email, options={'redirect_to': 'http://localhost:3000/auth/update-password'})
+
+    finally:
+        if original_get_supabase:
+            app.dependency_overrides[real_get_supabase_client] = original_get_supabase
+        else:
+            if real_get_supabase_client in app.dependency_overrides:
+                del app.dependency_overrides[real_get_supabase_client]
+        # monkeypatch will automatically revert the setattr changes for app_config_settings
+
+
+@pytest.mark.asyncio
+async def test_password_reset_request_invalid_email_format(
+    async_client: AsyncClient, monkeypatch
+):
+    request_data = {"email": "invalid-email"}
+    response = await async_client.post("/auth/users/password/reset", json=request_data)
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, f"Response: {response.text}"
+    response_data = response.json()
+    assert "value is not a valid email address" in response_data["detail"][0]["msg"]
+
+
+@pytest.mark.asyncio
+async def test_password_reset_request_supabase_api_error_rate_limit(
+    async_client: AsyncClient, monkeypatch
+):
+    test_email = f"reset_rate_limit_{uuid4().hex[:6]}@example.com"
+    request_data = {"email": test_email}
+
+    mock_supabase_auth = AsyncMock()
+    mock_supabase_auth.reset_password_for_email = AsyncMock(
+        side_effect=AuthApiError(message="Rate limit exceeded", status=429, code="rate_limit_exceeded")
+    )
+
+    mock_supabase_client_instance = AsyncMock()
+    mock_supabase_client_instance.auth = mock_supabase_auth
+
+    async def mock_get_supabase_override():
+        return mock_supabase_client_instance
+
+    original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
+    app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
+    try:
+        # No specific settings attributes are being changed for this test's logic.
+        # The route will use the global app_config_settings via dependency injection.
+
+        response = await async_client.post("/auth/users/password/reset", json=request_data)
+
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS, f"Response: {response.text}"
+        response_data = response.json()
+        assert response_data["detail"] == "Password reset request failed: Rate limit exceeded"
+
+    finally:
+        if original_get_supabase:
+            app.dependency_overrides[real_get_supabase_client] = original_get_supabase
+        else:
+            if real_get_supabase_client in app.dependency_overrides:
+                del app.dependency_overrides[real_get_supabase_client]
+        # monkeypatch will automatically revert the setattr changes for app_config_settings
+
+
+@pytest.mark.asyncio
+async def test_password_reset_request_supabase_api_error_generic(
+    async_client: AsyncClient, monkeypatch
+):
+    test_email = f"reset_generic_error_{uuid4().hex[:6]}@example.com"
+    request_data = {"email": test_email}
+
+    mock_supabase_auth = AsyncMock()
+    mock_supabase_auth.reset_password_for_email = AsyncMock(
+        side_effect=AuthApiError(message="Some generic Supabase error", status=500, code="generic_error")
+    )
+
+    mock_supabase_client_instance = AsyncMock()
+    mock_supabase_client_instance.auth = mock_supabase_auth
+
+    async def mock_get_supabase_override():
+        return mock_supabase_client_instance
+
+    original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
+    app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
+    try:
+        # No specific settings attributes are being changed for this test's logic.
+        # The route will use the global app_config_settings via dependency injection.
+
+        response = await async_client.post("/auth/users/password/reset", json=request_data)
+
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE, f"Response: {response.text}"
+        response_data = response.json()
+        assert response_data["detail"] == "Password reset request failed: Some generic Supabase error"
+
+    finally:
+        if original_get_supabase:
+            app.dependency_overrides[real_get_supabase_client] = original_get_supabase
+        else:
+            if real_get_supabase_client in app.dependency_overrides:
+                del app.dependency_overrides[real_get_supabase_client]
+        # monkeypatch will automatically revert the setattr changes for app_config_settings
+

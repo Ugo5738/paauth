@@ -77,6 +77,14 @@ class MagicLinkSentResponse(BaseModel):
     message: str
 
 
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetResponse(BaseModel):
+    message: str
+
+
 # --- User Registration Schemas ---
 class UserCreate(BaseModel):
     email: EmailStr

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from auth_service.main import app
 from auth_service.models import Profile
 from auth_service.routers import user_auth_routes
+from auth_service.config import settings as app_config_settings # Import the actual settings instance
 from auth_service.routers.user_auth_routes import get_profile_by_user_id_from_db
 from auth_service.supabase_client import get_supabase_client as real_get_supabase_client
 
@@ -22,7 +23,7 @@ from ..utils import create_mock_supa_session, create_mock_supa_user, create_defa
 
 @pytest.mark.asyncio
 async def test_register_user_successful_email_confirmation_required(
-    async_client: AsyncClient, db_session_for_crud: AsyncSession
+    async_client: AsyncClient, db_session_for_crud: AsyncSession, monkeypatch # Add monkeypatch fixture
 ):
     user_id = uuid4()
     user_email = f"testconfirm_{user_id.hex[:8]}@example.com"
@@ -54,14 +55,15 @@ async def test_register_user_successful_email_confirmation_required(
         )
         return mock_supabase_client
 
-    original_route_settings = user_auth_routes.settings
+    # Store original settings values and use monkeypatch
+    original_email_confirmation = app_config_settings.supabase_email_confirmation_required
+    original_auto_confirm = app_config_settings.supabase_auto_confirm_new_users
+    
+    monkeypatch.setattr(app_config_settings, 'supabase_email_confirmation_required', True)
+    monkeypatch.setattr(app_config_settings, 'supabase_auto_confirm_new_users', False)
+
     try:
         app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
-
-        current_mock_settings = create_default_mock_settings()
-        current_mock_settings.supabase_email_confirmation_required = True
-        current_mock_settings.supabase_auto_confirm_new_users = False
-        user_auth_routes.settings = current_mock_settings
 
         response = await async_client.post(
             "/auth/users/register",
@@ -91,12 +93,12 @@ async def test_register_user_successful_email_confirmation_required(
     finally:
         if real_get_supabase_client in app.dependency_overrides:
             del app.dependency_overrides[real_get_supabase_client]
-        user_auth_routes.settings = original_route_settings
+        # monkeypatch will automatically revert the setattr changes
 
 
 @pytest.mark.asyncio
 async def test_register_user_successful_auto_confirmed(
-    async_client: AsyncClient, db_session_for_crud: AsyncSession
+    async_client: AsyncClient, db_session_for_crud: AsyncSession, monkeypatch
 ):
     user_id = uuid4()
     user_email = f"autoconf_{user_id.hex[:8]}@example.com"
@@ -128,14 +130,15 @@ async def test_register_user_successful_auto_confirmed(
         )
         return mock_supabase_client
 
-    original_route_settings = user_auth_routes.settings
+    # Store original settings values and use monkeypatch
+    original_email_confirmation = app_config_settings.supabase_email_confirmation_required
+    original_auto_confirm = app_config_settings.supabase_auto_confirm_new_users
+
+    monkeypatch.setattr(app_config_settings, 'supabase_email_confirmation_required', False)
+    monkeypatch.setattr(app_config_settings, 'supabase_auto_confirm_new_users', True)
+
     try:
         app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
-
-        current_mock_settings = create_default_mock_settings()
-        current_mock_settings.supabase_email_confirmation_required = False
-        current_mock_settings.supabase_auto_confirm_new_users = True
-        user_auth_routes.settings = current_mock_settings
 
         response = await async_client.post(
             "/auth/users/register",
@@ -164,11 +167,11 @@ async def test_register_user_successful_auto_confirmed(
     finally:
         if real_get_supabase_client in app.dependency_overrides:
             del app.dependency_overrides[real_get_supabase_client]
-        user_auth_routes.settings = original_route_settings
+        # monkeypatch will automatically revert the setattr changes
 
 
 @pytest.mark.asyncio
-async def test_register_user_email_already_exists(async_client: AsyncClient):
+async def test_register_user_email_already_exists(async_client: AsyncClient, monkeypatch):
     from gotrue.errors import AuthApiError
 
     user_email = f"existing_{uuid4().hex[:8]}@example.com"
@@ -183,12 +186,13 @@ async def test_register_user_email_already_exists(async_client: AsyncClient):
         )
         return mock_supabase_client
 
-    original_route_settings = user_auth_routes.settings
     try:
         app.dependency_overrides[real_get_supabase_client] = (
             mock_get_supabase_override_email_exists
         )
-        user_auth_routes.settings = create_default_mock_settings()
+        # No specific settings attributes are being changed for this test's logic,
+        # so no monkeypatch.setattr calls are needed here.
+        # The route will use the global app_config_settings.
 
         response = await async_client.post(
             "/auth/users/register",
@@ -206,7 +210,7 @@ async def test_register_user_email_already_exists(async_client: AsyncClient):
     finally:
         if real_get_supabase_client in app.dependency_overrides:
             del app.dependency_overrides[real_get_supabase_client]
-        user_auth_routes.settings = original_route_settings
+        # monkeypatch will automatically revert the setattr changes
 
 
 @pytest.mark.asyncio
@@ -241,7 +245,7 @@ async def test_register_user_invalid_password_format(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_register_user_supabase_service_unavailable(async_client: AsyncClient):
+async def test_register_user_supabase_service_unavailable(async_client: AsyncClient, monkeypatch):
     async def mock_get_supabase_override_service_unavailable():
         mock_supabase_client = AsyncMock()
         mock_auth_object = MagicMock()
@@ -253,12 +257,13 @@ async def test_register_user_supabase_service_unavailable(async_client: AsyncCli
         mock_supabase_client.auth = mock_auth_object
         return mock_supabase_client
 
-    original_route_settings = user_auth_routes.settings
     try:
         app.dependency_overrides[real_get_supabase_client] = (
             mock_get_supabase_override_service_unavailable
         )
-        user_auth_routes.settings = create_default_mock_settings()
+        # No specific settings attributes are being changed for this test's logic,
+        # so no monkeypatch.setattr calls are needed here.
+        # The route will use the global app_config_settings.
 
         response = await async_client.post(
             "/auth/users/register",
@@ -276,4 +281,4 @@ async def test_register_user_supabase_service_unavailable(async_client: AsyncCli
     finally:
         if real_get_supabase_client in app.dependency_overrides:
             del app.dependency_overrides[real_get_supabase_client]
-        user_auth_routes.settings = original_route_settings
+        # monkeypatch will automatically revert the setattr changes

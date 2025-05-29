@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     initial_admin_password: str = Field(default="admin", env="INITIAL_ADMIN_PASSWORD")
 
     logging_level: str = Field(default="INFO", env="LOGGING_LEVEL")
+    PASSWORD_RESET_REDIRECT_URL: str = Field(default="http://localhost:3000/auth/update-password", env="PASSWORD_RESET_REDIRECT_URL")
 
     class Config:
         env_file = ".env"

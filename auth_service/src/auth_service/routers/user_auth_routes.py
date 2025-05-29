@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from supabase._async.client import AsyncClient
 from supabase.lib.client_options import ClientOptions 
 from gotrue.errors import AuthApiError as SupabaseAPIError 
@@ -6,11 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select 
 from uuid import UUID 
 
-from auth_service.schemas.user_schemas import UserCreate, UserResponse, ProfileCreate, ProfileResponse, SupabaseSession, SupabaseUser
+from auth_service.schemas.user_schemas import UserCreate, UserResponse, ProfileCreate, ProfileResponse, SupabaseSession, SupabaseUser, MagicLinkLoginRequest, MagicLinkSentResponse, PasswordResetRequest, PasswordResetResponse # Ensure all are present
 from auth_service.db import get_db
 from auth_service.models import Profile
 from auth_service.supabase_client import get_supabase_client
-from auth_service.config import settings 
+from auth_service.config import Settings as AppSettingsType # For type hinting settings
+from auth_service.dependencies import get_current_supabase_user, get_app_settings # Import for logout and settings 
 import logging 
 
 logger = logging.getLogger(__name__)
@@ -59,12 +60,13 @@ async def get_profile_by_user_id_from_db(db_session: AsyncSession, user_id: UUID
     return profile
 
 # --- User Authentication Endpoints ---
-from auth_service.schemas.user_schemas import UserLoginRequest # Added for login
+from auth_service.schemas.user_schemas import UserLoginRequest, MagicLinkLoginRequest, MagicLinkSentResponse # Added for login and magic link
 
 @router.post("/login", response_model=SupabaseSession, status_code=status.HTTP_200_OK)
 async def login_user(
     login_data: UserLoginRequest,
     supabase: AsyncClient = Depends(get_supabase_client),
+    settings: AppSettingsType = Depends(get_app_settings),
     # db_session: AsyncSession = Depends(get_db), # Not strictly needed for login unless updating last_login
 ):
     logger.info(f"Login attempt for email: {login_data.email}")
@@ -141,11 +143,48 @@ async def login_user(
         )
 
 
+@router.post("/login/magiclink", response_model=MagicLinkSentResponse, status_code=status.HTTP_200_OK)
+async def login_magic_link(
+    request_data: MagicLinkLoginRequest,
+    supabase: AsyncClient = Depends(get_supabase_client),
+):
+    logger.info(f"Magic link login attempt for email: {request_data.email}")
+    try:
+        await supabase.auth.sign_in_with_otp({"email": request_data.email, "options": {}})
+        
+        logger.info(f"Magic link successfully requested for {request_data.email}")
+        return MagicLinkSentResponse(
+            message=f"Magic link sent to {request_data.email}. Please check your inbox."
+        )
+
+    except SupabaseAPIError as e:
+        logger.warning(f"Supabase API error during magic link request for {request_data.email}: {e.message} (Status: {e.status})")
+        detail = f"Failed to send magic link: {e.message}"
+        http_status_code = status.HTTP_400_BAD_REQUEST
+        if e.status and 400 <= e.status < 500:
+            http_status_code = e.status
+        elif e.status and e.status == 500:
+            http_status_code = status.HTTP_502_BAD_GATEWAY
+            detail = "Authentication service provider returned an error."
+
+        raise HTTPException(
+            status_code=http_status_code,
+            detail=detail
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error during magic link request for {request_data.email}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while requesting the magic link."
+        )
+
+
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(
     user_in: UserCreate,
     supabase: AsyncClient = Depends(get_supabase_client),
     db_session: AsyncSession = Depends(get_db),
+    settings: AppSettingsType = Depends(get_app_settings),
 ):
     logger.info(f"Registration attempt for email: {user_in.email}")
     try:
@@ -261,6 +300,85 @@ async def register_user(
         raise HTTPException(
             status_code=http_status_code,
             detail=detail_message
+        )
+
+
+@router.post("/logout", status_code=status.HTTP_200_OK)
+async def logout_user(
+    request: Request,
+    supabase: AsyncClient = Depends(get_supabase_client),
+    current_user: SupabaseUser = Depends(get_current_supabase_user) # Ensures user is authenticated
+):
+    logger.info(f"Logout attempt for user: {current_user.email}")
+    
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        # This case should ideally be caught by get_current_supabase_user if token is missing/malformed,
+        # but as a safeguard or if get_current_supabase_user is bypassed/fails early.
+        logger.warning("Logout attempt with missing or malformed Authorization header.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization header missing or malformed."
+        )
+    
+    token = auth_header.split("Bearer ")[1]
+
+    try:
+        await supabase.auth.sign_out(jwt=token)
+        logger.info(f"User {current_user.email} logged out successfully.")
+        return {"message": "Successfully logged out"}
+    except SupabaseAPIError as e:
+        logger.warning(f"Supabase API error during logout for user {current_user.email}: {e.message} (Status: {e.status})")
+        # Supabase sign_out might not typically raise errors unless the token is already invalid
+        # or there's a service issue. If token is invalid, get_current_supabase_user should catch it.
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, # Or e.status if appropriate
+            detail=f"Logout failed: {e.message}"
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error during logout for user {current_user.email}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred during logout."
+        )
+
+
+@router.post("/password/reset", response_model=PasswordResetResponse, status_code=status.HTTP_200_OK)
+async def request_password_reset(
+    payload: PasswordResetRequest,
+    supabase: AsyncClient = Depends(get_supabase_client),
+    settings_dep: AppSettingsType = Depends(get_app_settings) # Access settings via dependency
+):
+    logger.info(f"Password reset requested for email: {payload.email}")
+    try:
+        # Supabase's reset_password_for_email does not error out if the email doesn't exist.
+        # It sends an email if the user exists, otherwise does nothing.
+        # This is good for security as it prevents email enumeration.
+        await supabase.auth.reset_password_for_email(
+            email=payload.email,
+            options={"redirect_to": settings_dep.PASSWORD_RESET_REDIRECT_URL}
+        )
+        # Always return a generic success message to prevent email enumeration
+        logger.info(f"Password reset process initiated for email: {payload.email} (if user exists).")
+        return PasswordResetResponse(message="If an account with this email exists, a password reset link has been sent.")
+    except SupabaseAPIError as e:
+        logger.error(f"Supabase API error during password reset for {payload.email}: {e.message} (Status: {e.status}, Code: {e.code})", exc_info=True)
+        # Handle specific Supabase errors if necessary, e.g., rate limiting
+        if e.status == 429:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Password reset request failed: {e.message}"
+            )
+        # For other Supabase errors, return a generic service unavailable message
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Password reset request failed: {e.message}" # Or a more generic message
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error during password reset for {payload.email}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while requesting password reset."
         )
 
 # Export the router to be used in main.py

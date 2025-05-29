@@ -1,7 +1,8 @@
 import pytest
-pytest.skip("Skipping async DB connection test due to environment constraints.", allow_module_level=True)
 from sqlalchemy import text
+
 from auth_service.db import engine
+
 
 @pytest.mark.asyncio
 async def test_db_connection():

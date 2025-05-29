@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     supabase_url: str = Field(..., env="SUPABASE_URL")
     supabase_anon_key: str = Field(..., env="SUPABASE_ANON_KEY")
     supabase_service_role_key: str = Field(..., env="SUPABASE_SERVICE_ROLE_KEY")
+    supabase_email_confirmation_required: bool = Field(default=True, env="SUPABASE_EMAIL_CONFIRMATION_REQUIRED")
+    supabase_auto_confirm_new_users: bool = Field(default=False, env="SUPABASE_AUTO_CONFIRM_NEW_USERS")
     m2m_jwt_secret_key: str = Field(..., env="M2M_JWT_SECRET_KEY")
     auth_service_database_url: str = Field(..., env="AUTH_SERVICE_DATABASE_URL")
     root_path: str = Field("", env="ROOT_PATH")

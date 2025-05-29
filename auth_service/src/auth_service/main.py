@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from auth_service.config import settings
 from auth_service.models import MessageResponse
+from auth_service.routers.user_auth_routes import user_auth_router
 
 # Configure structured JSON logging
 logger = logging.getLogger("auth_service")
@@ -29,6 +30,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include Routers
+app.include_router(user_auth_router)
 
 # Exception handlers
 @app.exception_handler(HTTPException)

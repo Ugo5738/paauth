@@ -184,15 +184,15 @@ This TODO list breaks down the development of the Auth Service into manageable t
     - User profile not found (edge case, should exist if registered via this service).
     - Unauthenticated access.
   - [x] 3.1.c: Implement endpoint: require Supabase JWT, extract `user_id`, fetch from local `profiles` table.
-  - [ ] 3.1.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
-- [ ] **3.2: Update User Profile (`PUT /auth/users/me`)**
-  - [ ] 3.2.a: Define Pydantic request model (`UserProfileUpdateRequest`).
-  - [ ] 3.2.b: Write integration tests:
+  - [x] 3.1.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
+- [x] **3.2: Update User Profile (`PUT /auth/users/me`)**
+  - [x] 3.2.a: Define Pydantic request model (`UserProfileUpdateRequest`).
+  - [x] 3.2.b: Write integration tests: (Covered: successful full/partial updates, username conflict, unauthenticated access, basic Pydantic validation for request model)
     - Successful update.
     - Validation errors (e.g., invalid username format if rules apply).
     - Unauthenticated access.
-  - [ ] 3.2.c: Implement endpoint: require Supabase JWT, extract `user_id`, update local `profiles` table.
-  - [ ] 3.2.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
+  - [x] 3.2.c: Implement endpoint: require Supabase JWT, extract `user_id`, update local `profiles` table.
+  - [x] 3.2.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
 
 ## Phase 4: `app_client` (M2M) Authentication & Management
 

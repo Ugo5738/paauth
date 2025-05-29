@@ -36,6 +36,32 @@ class ProfileResponse(ProfileBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UserProfileUpdateRequest(BaseModel):
+    username: Optional[str] = Field(None, max_length=50, description="New username for the user.", examples=["new_username"])
+    first_name: Optional[str] = Field(None, max_length=100, description="New first name for the user.", examples=["NewFirstName"])
+    last_name: Optional[str] = Field(None, max_length=100, description="New last name for the user.", examples=["NewLastName"])
+
+    model_config = ConfigDict(
+        extra="forbid", # Do not allow extra fields in the request
+        validate_assignment=True, # Validate fields on assignment
+        json_schema_extra={ # OpenAPI examples
+            "examples": [
+                {
+                    "username": "johndoe_updated",
+                    "first_name": "Johnathan",
+                    "last_name": "Doe",
+                },
+                {
+                    "first_name": "Jane"
+                },
+                {
+                    "username": "new_user_name"
+                }
+            ]
+        }
+    )
+
+
 # --- Supabase Schemas (mirroring supabase-py structure) ---
 class SupabaseUser(BaseModel):
     id: UUID

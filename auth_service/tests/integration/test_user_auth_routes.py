@@ -13,7 +13,7 @@ from auth_service.supabase_client import get_supabase_client as real_get_supabas
 from auth_service.config import settings as app_config_settings # For monkeypatching
 
 from ..utils import create_mock_supa_session, create_mock_supa_user, create_default_mock_settings
-from auth_service.schemas.user_schemas import UserLoginRequest, MagicLinkLoginRequest, MagicLinkSentResponse, SupabaseUser, PasswordResetRequest, PasswordUpdateRequest # Added for login, magic link, logout, and password reset tests
+from auth_service.schemas.user_schemas import UserLoginRequest, MagicLinkLoginRequest, MagicLinkSentResponse, SupabaseUser, PasswordResetRequest, PasswordUpdateRequest, OAuthProvider, OAuthRedirectResponse, SupabaseSession # Added for login, magic link, logout, and password reset tests
 from gotrue.errors import AuthApiError # Corrected import for login error tests
 from gotrue.types import UserAttributes # For password update payload
 from auth_service.dependencies.user_deps import get_current_supabase_user as real_get_current_supabase_user # Placeholder for actual dependency

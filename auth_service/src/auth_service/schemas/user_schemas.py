@@ -59,8 +59,19 @@ class SupabaseSession(
 
     model_config = ConfigDict(from_attributes=True)
 
+from enum import Enum
 
 # --- User Authentication Schemas ---
+
+class OAuthProvider(str, Enum):
+    GOOGLE = "google"
+    GITHUB = "github"
+    # Add other providers as needed, e.g., AZURE = "azure"
+
+
+class OAuthRedirectResponse(BaseModel):
+    authorization_url: str
+
 class UserLoginRequest(BaseModel):
     email: EmailStr
     password: str

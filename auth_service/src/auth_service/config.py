@@ -4,30 +4,30 @@ from pydantic import ConfigDict
 
 
 class Settings(BaseSettings):
-    supabase_url: str = Field(..., env="SUPABASE_URL")
-    supabase_anon_key: str = Field(..., env="SUPABASE_ANON_KEY")
-    supabase_service_role_key: str = Field(..., env="SUPABASE_SERVICE_ROLE_KEY")
-    supabase_email_confirmation_required: bool = Field(default=True, env="SUPABASE_EMAIL_CONFIRMATION_REQUIRED")
-    supabase_auto_confirm_new_users: bool = Field(default=False, env="SUPABASE_AUTO_CONFIRM_NEW_USERS")
-    m2m_jwt_secret_key: str = Field(..., env="M2M_JWT_SECRET_KEY")
-    auth_service_database_url: str = Field(..., env="AUTH_SERVICE_DATABASE_URL")
-    root_path: str = Field("", env="ROOT_PATH")
+    supabase_url: str = Field(..., json_schema_extra={'env': "SUPABASE_URL"})
+    supabase_anon_key: str = Field(..., json_schema_extra={'env': "SUPABASE_ANON_KEY"})
+    supabase_service_role_key: str = Field(..., json_schema_extra={'env': "SUPABASE_SERVICE_ROLE_KEY"})
+    supabase_email_confirmation_required: bool = Field(default=True, json_schema_extra={'env': "SUPABASE_EMAIL_CONFIRMATION_REQUIRED"})
+    supabase_auto_confirm_new_users: bool = Field(default=False, json_schema_extra={'env': "SUPABASE_AUTO_CONFIRM_NEW_USERS"})
+    m2m_jwt_secret_key: str = Field(..., json_schema_extra={'env': "M2M_JWT_SECRET_KEY"})
+    auth_service_database_url: str = Field(..., json_schema_extra={'env': "AUTH_SERVICE_DATABASE_URL"})
+    root_path: str = Field("", json_schema_extra={'env': "ROOT_PATH"})
 
     # Define the fields from your .env file
-    rate_limit_login: str = Field(default="5/minute", env="RATE_LIMIT_LOGIN")
-    rate_limit_register: str = Field(default="5/minute", env="RATE_LIMIT_REGISTER")
-    rate_limit_token: str = Field(default="10/minute", env="RATE_LIMIT_TOKEN")
+    rate_limit_login: str = Field(default="5/minute", json_schema_extra={'env': "RATE_LIMIT_LOGIN"})
+    rate_limit_register: str = Field(default="5/minute", json_schema_extra={'env': "RATE_LIMIT_REGISTER"})
+    rate_limit_token: str = Field(default="10/minute", json_schema_extra={'env': "RATE_LIMIT_TOKEN"})
     rate_limit_password_reset: str = Field(
-        default="3/minute", env="RATE_LIMIT_PASSWORD_RESET"
+        default="3/minute", json_schema_extra={'env': "RATE_LIMIT_PASSWORD_RESET"}
     )
 
     initial_admin_email: str = Field(
-        default="admin@admin.com", env="INITIAL_ADMIN_EMAIL"
+        default="admin@admin.com", json_schema_extra={'env': "INITIAL_ADMIN_EMAIL"}
     )
-    initial_admin_password: str = Field(default="admin", env="INITIAL_ADMIN_PASSWORD")
+    initial_admin_password: str = Field(default="admin", json_schema_extra={'env': "INITIAL_ADMIN_PASSWORD"})
 
-    logging_level: str = Field(default="INFO", env="LOGGING_LEVEL")
-    PASSWORD_RESET_REDIRECT_URL: str = Field(default="http://localhost:3000/auth/update-password", env="PASSWORD_RESET_REDIRECT_URL")
+    logging_level: str = Field(default="INFO", json_schema_extra={'env': "LOGGING_LEVEL"})
+    PASSWORD_RESET_REDIRECT_URL: str = Field(default="http://localhost:3000/auth/update-password", json_schema_extra={'env': "PASSWORD_RESET_REDIRECT_URL"})
 
     model_config = ConfigDict(
         env_file=".env",

@@ -26,6 +26,17 @@ class Settings(BaseSettings):
     )
     initial_admin_password: str = Field(default="admin", json_schema_extra={'env': "INITIAL_ADMIN_PASSWORD"})
 
+    JWT_REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+
+    # OAuth Settings
+    OAUTH_REDIRECT_URI: str = "http://localhost:8000/auth/users/login/google/callback" # Default, adjust per provider if needed
+    OAUTH_STATE_COOKIE_NAME: str = "pa_oauth_state"
+    OAUTH_STATE_COOKIE_MAX_AGE_SECONDS: int = 300 # 5 minutes
+
+    # Provider-specific OAuth Settings (Example for Google, extend as needed)
+    GOOGLE_CLIENT_ID: str | None = None
+    GOOGLE_CLIENT_SECRET: str | None = None
+
     logging_level: str = Field(default="INFO", json_schema_extra={'env': "LOGGING_LEVEL"})
     PASSWORD_RESET_REDIRECT_URL: str = Field(default="http://localhost:3000/auth/update-password", json_schema_extra={'env': "PASSWORD_RESET_REDIRECT_URL"})
 

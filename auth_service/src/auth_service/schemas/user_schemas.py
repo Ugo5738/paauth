@@ -7,6 +7,7 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 # --- Profile Schemas ---
 class ProfileBase(BaseModel):
+    email: EmailStr # Added email field
     username: Optional[str] = Field(None, max_length=50)
     first_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
@@ -14,6 +15,16 @@ class ProfileBase(BaseModel):
 
 class ProfileCreate(ProfileBase):
     user_id: UUID  # Will be populated from Supabase user ID
+    # email is inherited from ProfileBase if we add it there, or can be added here if specific to creation
+    # For now, assuming email is part of Supabase user and ProfileBase might not need it directly
+
+
+class ProfileUpdate(ProfileBase):
+    # All fields are optional for an update
+    username: Optional[str] = Field(None, max_length=50)
+    first_name: Optional[str] = Field(None, max_length=100)
+    last_name: Optional[str] = Field(None, max_length=100)
+    is_active: Optional[bool] = None # Allow updating active status
 
 
 class ProfileResponse(ProfileBase):
@@ -95,6 +106,10 @@ class PasswordResetResponse(BaseModel):
 
 class PasswordUpdateRequest(BaseModel):
     new_password: str = Field(..., min_length=8) # Enforce min_length, same as registration
+
+
+class PasswordUpdateResponse(BaseModel):
+    message: str
 
 
 # --- User Registration Schemas ---

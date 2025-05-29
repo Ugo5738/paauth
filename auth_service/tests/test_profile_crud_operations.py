@@ -38,6 +38,7 @@ async def test_create_profile_successfully(db_session_for_crud: AsyncSession):
     # Create a new session for the profile creation to avoid transaction conflicts
     profile_data_to_create = ProfileCreate(
         user_id=user_id,
+        email=dummy_email_for_auth_user, # Add email field
         username=username,
         first_name="Test",
         last_name="User",
@@ -79,7 +80,11 @@ async def test_get_profile_by_user_id_found(db_session_for_crud: AsyncSession):
     )
     await db_session_for_crud.commit()
 
-    profile_data_to_create = ProfileCreate(user_id=user_id, username=username)
+    profile_data_to_create = ProfileCreate(
+        user_id=user_id,
+        email=dummy_email_for_auth_user, # Add email field
+        username=username
+    )
 
     # First, create a profile to fetch
     created_profile = await create_profile_in_db(

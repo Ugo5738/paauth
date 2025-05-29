@@ -8,6 +8,7 @@ class Profile(Base):
     __tablename__ = "profiles"
 
     user_id = Column(UUID(as_uuid=True), ForeignKey("auth.users.id", ondelete="CASCADE"), primary_key=True)
+    email = Column(String, nullable=False, index=True) # Added email column
     username = Column(String, unique=True, nullable=True, index=True)
     first_name = Column(String, nullable=True)
     last_name = Column(String, nullable=True)

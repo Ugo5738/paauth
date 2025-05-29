@@ -35,7 +35,7 @@ migrations/
 .DS_Store
 
 # Poetry
-poetry.lock
+# poetry.lock
 
 # Cache directories
 .cache/

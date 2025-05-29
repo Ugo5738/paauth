@@ -247,10 +247,16 @@ async def register_user(
 ):
     logger.info(f"Registration attempt for email: {user_in.email}")
     try:
+        user_metadata = {
+            "username": user_in.username,
+            "first_name": user_in.first_name,
+            "last_name": user_in.last_name,
+        }
         supa_response = await supabase.auth.sign_up(
             {
                 "email": user_in.email,
                 "password": user_in.password,
+                "options": {"data": user_metadata}
             }
         )
         logger.debug(f"Supabase sign_up response: {supa_response}")
@@ -534,6 +540,34 @@ async def update_user_password(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred during password update.",
         )
+
+
+@router.get("/me", response_model=ProfileResponse, status_code=status.HTTP_200_OK)
+async def get_current_user_profile(
+    current_user: SupabaseUser = Depends(get_current_supabase_user),
+    db_session: AsyncSession = Depends(get_db),
+):
+    """
+    Get the profile of the currently authenticated user.
+    """
+    logger.info(f"Fetching profile for current user: {current_user.id}")
+    
+    # Use the user_crud function to get the profile
+    profile = await user_crud.get_profile_by_user_id_from_db(
+        db_session=db_session, user_id=current_user.id
+    )
+    
+    if not profile:
+        logger.warning(f"Profile not found for user_id: {current_user.id}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Profile not found for user {current_user.id}",
+        )
+    
+    logger.info(f"Profile found for user_id: {current_user.id}. Returning profile.")
+    # FastAPI will automatically convert the SQLAlchemy 'profile' model 
+    # to the 'ProfileResponse' Pydantic model due to the response_model annotation.
+    return profile
 
 
 # --- OAuth Endpoints ---

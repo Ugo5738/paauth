@@ -164,26 +164,26 @@ This TODO list breaks down the development of the Auth Service into manageable t
   - [x] 2.6.b: Write integration tests: successful update, weak new password (if Supabase enforces), invalid current token.
   - [x] 2.6.c: Implement endpoint: require Supabase JWT, call `supabase.auth.update_user()` with new password.
   - [x] 2.6.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
-- [ ] **2.7: (If supporting) Social Logins (`GET /auth/users/login/{provider}`, `POST /auth/users/login/{provider}/callback`)**
-  - [x] 2.7.a: Define Pydantic models for callback if needed.
-  - [ ] 2.7.b: Write integration tests for initiation and callback (may require more complex mocking or test setup).
-  - [ ] 2.7.c: Implement endpoints: call `supabase.auth.sign_in_with_oauth()`, handle callback.
-  - [ ] 2.7.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
-- [ ] **2.8: (If supporting) MFA Proxy Endpoints**
-  - [ ] 2.8.a: Research Supabase MFA flow (enroll, challenge, verify). Define Pydantic models.
-  - [ ] 2.8.b: Write integration tests for each MFA step.
-  - [ ] 2.8.c: Implement proxy endpoints to Supabase MFA functions.
-  - [ ] 2.8.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
+    <!-- - [ ] **2.7: (If supporting) Social Logins (`GET /auth/users/login/{provider}`, `POST /auth/users/login/{provider}/callback`)** -->
+      <!-- - [x] 2.7.a: Define Pydantic models for callback if needed. -->
+      <!-- - [ ] 2.7.b: Write integration tests for initiation and callback (may require more complex mocking or test setup). -->
+      <!-- - [ ] 2.7.c: Implement endpoints: call `supabase.auth.sign_in_with_oauth()`, handle callback. -->
+      <!-- - [ ] 2.7.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'. -->
+    <!-- - [ ] **2.8: (If supporting) MFA Proxy Endpoints** -->
+      <!-- - [ ] 2.8.a: Research Supabase MFA flow (enroll, challenge, verify). Define Pydantic models. -->
+      <!-- - [ ] 2.8.b: Write integration tests for each MFA step. -->
+      <!-- - [ ] 2.8.c: Implement proxy endpoints to Supabase MFA functions. -->
+      <!-- - [ ] 2.8.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'. -->
 
 ## Phase 3: User Profile Management (Auth Service Specific Data)
 
 - [ ] **3.1: Get User Profile (`GET /auth/users/me`)**
-  - [ ] 3.1.a: Define Pydantic response model (`UserProfileResponse` - based on `profiles` table fields).
-  - [ ] 3.1.b: Write integration tests:
+  - [x] 3.1.a: Define Pydantic response model (`UserProfileResponse` - based on `profiles` table fields).
+  - [x] 3.1.b: Write integration tests:
     - Successful retrieval for authenticated user.
     - User profile not found (edge case, should exist if registered via this service).
     - Unauthenticated access.
-  - [ ] 3.1.c: Implement endpoint: require Supabase JWT, extract `user_id`, fetch from local `profiles` table.
+  - [x] 3.1.c: Implement endpoint: require Supabase JWT, extract `user_id`, fetch from local `profiles` table.
   - [ ] 3.1.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
 - [ ] **3.2: Update User Profile (`PUT /auth/users/me`)**
   - [ ] 3.2.a: Define Pydantic request model (`UserProfileUpdateRequest`).

@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 
 # --- Profile Schemas ---
@@ -22,8 +22,7 @@ class ProfileResponse(ProfileBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # --- Supabase Schemas (mirroring supabase-py structure) ---
@@ -45,8 +44,7 @@ class SupabaseUser(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SupabaseSession(
@@ -59,8 +57,7 @@ class SupabaseSession(
     refresh_token: Optional[str] = None
     user: SupabaseUser
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # --- User Authentication Schemas ---
@@ -85,6 +82,10 @@ class PasswordResetResponse(BaseModel):
     message: str
 
 
+class PasswordUpdateRequest(BaseModel):
+    new_password: str = Field(..., min_length=8) # Enforce min_length, same as registration
+
+
 # --- User Registration Schemas ---
 class UserCreate(BaseModel):
     email: EmailStr
@@ -107,5 +108,4 @@ class UserResponse(BaseModel):
         None  # Profile might not be created if Supabase signup fails or is pending
     )
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

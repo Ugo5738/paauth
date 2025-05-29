@@ -1,5 +1,6 @@
 from pydantic import Field
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 
 
 class Settings(BaseSettings):
@@ -28,10 +29,11 @@ class Settings(BaseSettings):
     logging_level: str = Field(default="INFO", env="LOGGING_LEVEL")
     PASSWORD_RESET_REDIRECT_URL: str = Field(default="http://localhost:3000/auth/update-password", env="PASSWORD_RESET_REDIRECT_URL")
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    model_config = ConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False
+    )
 
 
 settings = Settings()

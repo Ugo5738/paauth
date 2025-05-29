@@ -1,17 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from supabase._async.client import AsyncClient
 from supabase.lib.client_options import ClientOptions 
-from gotrue.errors import AuthApiError as SupabaseAPIError 
+from gotrue.errors import AuthApiError as SupabaseAPIError
+from gotrue.types import UserAttributes 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select 
 from uuid import UUID 
 
-from auth_service.schemas.user_schemas import UserCreate, UserResponse, ProfileCreate, ProfileResponse, SupabaseSession, SupabaseUser, MagicLinkLoginRequest, MagicLinkSentResponse, PasswordResetRequest, PasswordResetResponse # Ensure all are present
+from auth_service.schemas.user_schemas import UserCreate, UserResponse, ProfileCreate, ProfileResponse, SupabaseSession, SupabaseUser, MagicLinkLoginRequest, MagicLinkSentResponse, PasswordResetRequest, PasswordResetResponse, PasswordUpdateRequest # Ensure all are present
 from auth_service.db import get_db
 from auth_service.models import Profile
 from auth_service.supabase_client import get_supabase_client
 from auth_service.config import Settings as AppSettingsType # For type hinting settings
-from auth_service.dependencies import get_current_supabase_user, get_app_settings # Import for logout and settings 
+from auth_service.dependencies import get_current_supabase_user, get_app_settings, oauth2_scheme # Import for logout, settings, and token dependency 
 import logging 
 
 logger = logging.getLogger(__name__)
@@ -264,7 +265,7 @@ async def register_user(
         return UserResponse(
             message=message,
             session=session_response_data,
-            profile=ProfileResponse.from_orm(created_profile)
+            profile=ProfileResponse.model_validate(created_profile)
         )
 
     except SupabaseAPIError as e:
@@ -380,6 +381,50 @@ async def request_password_reset(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while requesting password reset."
         )
+
+
+@router.post("/password/update", response_model=UserResponse, status_code=status.HTTP_200_OK)
+async def update_user_password(
+    payload: PasswordUpdateRequest,
+    token: str = Depends(oauth2_scheme), 
+    supabase: AsyncClient = Depends(get_supabase_client),
+    current_user: SupabaseUser = Depends(get_current_supabase_user) 
+):
+    logger.info(f"Password update attempt for user: {current_user.email}")
+    try:
+        await supabase.auth.update_user(
+            attributes=UserAttributes(password=payload.new_password),
+            jwt=token 
+        )
+        logger.info(f"Password updated successfully for user: {current_user.email}")
+        return UserResponse(message="Password updated successfully.")
+    except SupabaseAPIError as e:
+        logger.warning(
+            f"Supabase API error during password update for user {current_user.email}: "
+            f"{e.message} (Status: {e.status}, Code: {e.code})"
+        )
+        error_detail = f"Password update failed: {e.message}"
+        error_status_code = status.HTTP_503_SERVICE_UNAVAILABLE 
+        
+        if isinstance(e.status, int) and 400 <= e.status < 600:
+            error_status_code = e.status
+        
+        raise HTTPException(
+            status_code=error_status_code,
+            detail=error_detail
+        )
+    except HTTPException: 
+        raise
+    except Exception as e:
+        logger.error(
+            f"Unexpected error during password update for user {current_user.email}: {e}", 
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred during password update."
+        )
+
 
 # Export the router to be used in main.py
 user_auth_router = router

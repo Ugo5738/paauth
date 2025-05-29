@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
 import pytest
-from fastapi import status
+from fastapi import status, HTTPException
 from httpx import AsyncClient, Response as HttpxResponse # Added Response for AuthApiError mocking
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
@@ -13,8 +13,10 @@ from auth_service.supabase_client import get_supabase_client as real_get_supabas
 from auth_service.config import settings as app_config_settings # For monkeypatching
 
 from ..utils import create_mock_supa_session, create_mock_supa_user, create_default_mock_settings
-from auth_service.schemas.user_schemas import UserLoginRequest, MagicLinkLoginRequest, MagicLinkSentResponse, SupabaseUser, PasswordResetRequest # Added for login, magic link, logout, and password reset tests
+from auth_service.schemas.user_schemas import UserLoginRequest, MagicLinkLoginRequest, MagicLinkSentResponse, SupabaseUser, PasswordResetRequest, PasswordUpdateRequest # Added for login, magic link, logout, and password reset tests
 from gotrue.errors import AuthApiError # Corrected import for login error tests
+from gotrue.types import UserAttributes # For password update payload
+from auth_service.dependencies.user_deps import get_current_supabase_user as real_get_current_supabase_user # Placeholder for actual dependency
 
 
 @pytest.mark.asyncio
@@ -451,7 +453,7 @@ async def test_logout_user_invalid_token_format(
     
     assert response.status_code == status.HTTP_401_UNAUTHORIZED, f"Response: {response.text}"
     response_data = response.json()
-    assert "Could not validate credentials" in response_data.get("detail", "")
+    assert response_data.get("detail") == "Invalid authentication credentials"
 
 
 @pytest.mark.asyncio
@@ -492,7 +494,7 @@ async def test_logout_user_expired_token(
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED, f"Response: {response.text}"
         response_data = response.json()
-        assert "Invalid or expired token: Token expired" in response_data.get("detail", "")
+        assert response_data.get("detail") == "Invalid authentication credentials"
 
     finally:
         if original_get_supabase:
@@ -711,4 +713,219 @@ async def test_password_reset_request_supabase_api_error_generic(
             if real_get_supabase_client in app.dependency_overrides:
                 del app.dependency_overrides[real_get_supabase_client]
         # monkeypatch will automatically revert the setattr changes for app_config_settings
+
+
+@pytest.mark.asyncio
+async def test_password_update_successful(
+    async_client: AsyncClient, monkeypatch
+):
+    """
+    Test successful password update for an authenticated user.
+    """
+    mock_user_id = uuid4()
+    mock_current_user = create_mock_supa_user(id_val=mock_user_id, email="testuser@example.com")
+    new_password = "NewSecurePassword123!"
+
+    # Mock the get_current_supabase_user dependency
+    async def mock_get_current_user_override():
+        return mock_current_user
+
+    # Mock Supabase client's auth.update_user method
+    # Supabase update_user returns a response with a user object
+    mock_updated_supa_user_response = MagicMock()
+    mock_updated_supa_user_response.user = create_mock_supa_user(
+        id_val=mock_user_id, email="testuser@example.com" # Simulate user object returned after update
+    )
+
+    mock_supabase_auth = AsyncMock()
+    mock_supabase_auth.update_user = AsyncMock(return_value=mock_updated_supa_user_response)
+
+    mock_supabase_client_instance = AsyncMock()
+    mock_supabase_client_instance.auth = mock_supabase_auth
+
+    async def mock_get_supabase_override():
+        return mock_supabase_client_instance
+
+    # Store original dependency overrides to restore them later
+    original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
+    original_get_current_user = app.dependency_overrides.get(real_get_current_supabase_user) 
+
+    app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
+    app.dependency_overrides[real_get_current_supabase_user] = mock_get_current_user_override
+
+    try:
+        response = await async_client.post(
+            "/auth/users/password/update",
+            json={"new_password": new_password},
+            headers={"Authorization": f"Bearer mock_access_token_for_{mock_user_id}"} 
+        )
+
+        assert response.status_code == status.HTTP_200_OK, f"Response: {response.text}"
+        response_data = response.json()
+        assert response_data["message"] == "Password updated successfully."
+
+        mock_supabase_auth.update_user.assert_called_once()
+        
+        call_args = mock_supabase_auth.update_user.call_args
+        assert call_args is not None, "update_user was not called with any arguments"
+        
+        # Check keyword arguments
+        assert "attributes" in call_args.kwargs
+        user_attributes_arg = call_args.kwargs["attributes"]
+        assert isinstance(user_attributes_arg, dict), "UserAttributes should be a dict"
+        assert "password" in user_attributes_arg, "Password key missing in UserAttributes"
+        assert user_attributes_arg["password"] == new_password
+        
+        assert "jwt" in call_args.kwargs
+        # The token passed to update_user should be the one extracted by oauth2_scheme from the header
+        assert call_args.kwargs["jwt"] == f"mock_access_token_for_{mock_user_id}" 
+
+    finally:
+        if original_get_supabase:
+            app.dependency_overrides[real_get_supabase_client] = original_get_supabase
+        else:
+            if real_get_supabase_client in app.dependency_overrides: 
+                del app.dependency_overrides[real_get_supabase_client]
+        
+        if original_get_current_user:
+            app.dependency_overrides[real_get_current_supabase_user] = original_get_current_user
+        else:
+            if real_get_current_supabase_user in app.dependency_overrides: 
+                del app.dependency_overrides[real_get_current_supabase_user]
+
+
+@pytest.mark.asyncio
+async def test_password_update_weak_password(
+    async_client: AsyncClient, monkeypatch
+):
+    """
+    Test password update attempt with a weak password.
+    Simulates Supabase rejecting the password due to strength policies.
+    """
+    mock_user_id = uuid4()
+    mock_current_user = create_mock_supa_user(id_val=mock_user_id, email="testuser@example.com")
+    weak_password = "weak" # Example of a weak password
+
+    # Mock the get_current_supabase_user dependency
+    async def mock_get_current_user_override():
+        return mock_current_user
+
+    # Mock Supabase client's auth.update_user to simulate weak password error
+    mock_supabase_auth = AsyncMock()
+    weak_password_error_message = "Password should be stronger." # Or a more specific Supabase message
+    mock_supabase_auth.update_user = AsyncMock(
+        side_effect=AuthApiError(
+            message=weak_password_error_message, 
+            status=status.HTTP_422_UNPROCESSABLE_ENTITY, 
+            code="weak_password" # Hypothetical error code from Supabase
+        )
+    )
+
+    mock_supabase_client_instance = AsyncMock()
+    mock_supabase_client_instance.auth = mock_supabase_auth
+
+    async def mock_get_supabase_override():
+        return mock_supabase_client_instance
+
+    original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
+    original_get_current_user = app.dependency_overrides.get(real_get_current_supabase_user)
+
+    app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
+    app.dependency_overrides[real_get_current_supabase_user] = mock_get_current_user_override
+
+    try:
+        response = await async_client.post(
+            "/auth/users/password/update",
+            json={"new_password": weak_password},
+            headers={"Authorization": f"Bearer mock_access_token_for_{mock_user_id}"}
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, f"Response: {response.text}"
+        response_data = response.json()
+        # Check for Pydantic validation error structure
+        assert isinstance(response_data["detail"], list)
+        assert len(response_data["detail"]) == 1
+        detail_error = response_data["detail"][0]
+        assert detail_error["type"] == "string_too_short"
+        assert detail_error["loc"] == ["body", "new_password"]
+        assert "ctx" in detail_error and detail_error["ctx"]["min_length"] == 8
+        assert detail_error["input"] == weak_password
+        assert "String should have at least 8 characters" in detail_error["msg"]
+
+        # Ensure Supabase update_user was NOT called because Pydantic validation failed first
+        mock_supabase_auth.update_user.assert_not_called()
+
+    finally:
+        if original_get_supabase:
+            app.dependency_overrides[real_get_supabase_client] = original_get_supabase
+        else:
+            if real_get_supabase_client in app.dependency_overrides: # pragma: no cover
+                del app.dependency_overrides[real_get_supabase_client]
+        
+        if original_get_current_user:
+            app.dependency_overrides[real_get_current_supabase_user] = original_get_current_user
+        else:
+            if real_get_current_supabase_user in app.dependency_overrides: # pragma: no cover
+                del app.dependency_overrides[real_get_current_supabase_user]
+
+
+@pytest.mark.asyncio
+async def test_password_update_invalid_token(
+    async_client: AsyncClient, monkeypatch
+):
+    """
+    Test password update attempt with an invalid/expired authentication token.
+    """
+    new_password = "NewSecurePassword123!"
+    expected_error_detail = "Invalid authentication credentials" # Or whatever the actual dependency raises
+
+    # Mock the get_current_supabase_user dependency to raise an auth error
+    async def mock_get_current_user_auth_error():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail=expected_error_detail
+        )
+
+    # No need to mock supabase_client.auth.update_user as it shouldn't be called
+    mock_supabase_auth = AsyncMock()
+    mock_supabase_auth.update_user = AsyncMock() # Define it so it can be checked if called
+
+    mock_supabase_client_instance = AsyncMock()
+    mock_supabase_client_instance.auth = mock_supabase_auth
+    
+    async def mock_get_supabase_override(): # Still need to provide the supabase client
+        return mock_supabase_client_instance
+
+    original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
+    original_get_current_user = app.dependency_overrides.get(real_get_current_supabase_user)
+
+    app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
+    app.dependency_overrides[real_get_current_supabase_user] = mock_get_current_user_auth_error
+
+    try:
+        response = await async_client.post(
+            "/auth/users/password/update",
+            json={"new_password": new_password},
+            headers={"Authorization": "Bearer an_invalid_or_expired_token"} # Provide an invalid token
+        )
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED, f"Response: {response.text}"
+        response_data = response.json()
+        assert response_data["detail"] == expected_error_detail
+
+        # Ensure Supabase update_user was NOT called
+        mock_supabase_auth.update_user.assert_not_called()
+
+    finally:
+        if original_get_supabase:
+            app.dependency_overrides[real_get_supabase_client] = original_get_supabase
+        else:
+            if real_get_supabase_client in app.dependency_overrides: # pragma: no cover
+                del app.dependency_overrides[real_get_supabase_client]
+        
+        if original_get_current_user:
+            app.dependency_overrides[real_get_current_supabase_user] = original_get_current_user
+        else:
+            if real_get_current_supabase_user in app.dependency_overrides: # pragma: no cover
+                del app.dependency_overrides[real_get_current_supabase_user]
 

@@ -153,10 +153,7 @@ async def test_register_user_successful_auto_confirmed(
 
         assert response.status_code == 201, f"Response: {response.text}"
         response_data = response.json()
-        assert (
-            response_data["message"]
-            == "User registered and auto-confirmed successfully."
-        )
+        assert response_data["message"] == "User registered successfully."
         assert response_data["session"]["user"]["id"] == str(user_id)
         assert "access_token" in response_data["session"]
 

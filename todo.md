@@ -257,11 +257,11 @@ Define `RoleCreate`, `RoleUpdate`, `RoleResponse`, `PermissionCreate`, `Permissi
   - [x] 5.2.a: Write integration tests for `POST`, `GET` (list & single), `PUT`, `DELETE` for permissions.
   - [x] 5.2.b: Implement CRUD endpoints for `permissions` using admin dependency.
   - [x] 5.2.c: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
-- [ ] **5.3: Assign/Remove Permissions from Roles (`/auth/admin/roles/{role_id}/permissions`) (Admin Protected)**
-  - [ ] 5.3.a: Define Pydantic request for assigning permission ID.
-  - [ ] 5.3.b: Write integration tests for `POST /auth/admin/roles/{role_id}/permissions/{permission_id}` (or with request body) and `DELETE /auth/admin/roles/{role_id}/permissions/{permission_id}`. Test for role/permission not found, already assigned/not assigned.
-  - [ ] 5.3.c: Implement endpoints using admin dependency. Manage entries in `role_permissions` table.
-  - [ ] 5.3.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
+- [x] **5.3: Assign/Remove Permissions from Roles (`/auth/admin/roles/{role_id}/permissions`) (Admin Protected)**
+  - [x] 5.3.a: Define Pydantic request for assigning permission ID.
+  - [x] 5.3.b: Write integration tests for `POST /auth/admin/roles/{role_id}/permissions/{permission_id}` (or with request body) and `DELETE /auth/admin/roles/{role_id}/permissions/{permission_id}`. Test for role/permission not found, already assigned/not assigned.
+  - [x] 5.3.c: Implement endpoints using admin dependency. Manage entries in `role_permissions` table.
+  - [x] 5.3.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
 - [ ] **5.4: Assign/Remove Roles for Human Users (`/auth/admin/users/{user_id}/roles`) (Admin Protected)**
   - [ ] 5.4.a: Define Pydantic request for assigning role ID.
   - [ ] 5.4.b: Write integration tests for `POST /auth/admin/users/{user_id}/roles/{role_id}` and `DELETE /auth/admin/users/{user_id}/roles/{role_id}`. Test for user/role not found, already assigned/not assigned. (Note: `user_id` is Supabase `auth.users.id`).

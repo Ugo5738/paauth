@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from auth_service.config import settings
-from auth_service.models import MessageResponse
+from auth_service.schemas import MessageResponse
 from auth_service.routers.user_auth_routes import user_auth_router
 
 # Configure structured JSON logging

@@ -177,3 +177,10 @@ class UserResponse(BaseModel):
     )
 
     model_config = ConfigDict(from_attributes=True)
+
+# Added from old models.py
+class UserTokenData(BaseModel):
+    user_id: str = Field(..., alias="sub")
+    roles: List[str] = Field(default_factory=list)
+    permissions: List[str] = Field(default_factory=list)
+    exp: int

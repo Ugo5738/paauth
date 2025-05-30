@@ -19,7 +19,6 @@ from auth_service.dependencies import (  # Import for logout, settings, and toke
     get_current_supabase_user,
     oauth2_scheme,
 )
-from auth_service.models import Profile
 from auth_service.schemas.user_schemas import PasswordUpdateResponse  # Added
 from auth_service.schemas.user_schemas import (
     UserProfileUpdateRequest,  # Added for profile updates

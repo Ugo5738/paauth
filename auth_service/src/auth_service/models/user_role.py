@@ -1,5 +1,6 @@
 from sqlalchemy import Column, DateTime, func, ForeignKey, PrimaryKeyConstraint
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 
 from auth_service.db import Base
 
@@ -13,6 +14,9 @@ class UserRole(Base):
     __table_args__ = (
         PrimaryKeyConstraint('user_id', 'role_id', name='user_roles_pkey'),
     )
+    
+    # Relationships
+    role = relationship("Role", back_populates="user_roles")
 
     def __repr__(self):
         return f"<UserRole(user_id='{self.user_id}', role_id='{self.role_id}')>"

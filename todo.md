@@ -38,7 +38,7 @@ This TODO list breaks down the development of the Auth Service into manageable t
 - [x] **0.6: Define Core Pydantic Models**
   - [x] 0.6.a: Define initial Pydantic models in `auth_service/src/auth_service/schemas/common_schemas.py` (e.g., `MessageResponse`).
   - [x] 0.6.b: Define Pydantic models for JWT payloads in `auth_service/src/auth_service/schemas/user_schemas.py` (e.g., `UserTokenData`) and `auth_service/src/auth_service/schemas/app_client_schemas.py` (e.g., `AppClientTokenData`).
-  - [x] 0.6.c: Organize Pydantic models into a dedicated `auth_service/src/auth_service/schemas/` directory with submodules (e.g., `user_schemas.py`, `app_client_schemas.py`, `common_schemas.py`) and an `__init__.py` for exports. Consolidate FastAPI dependencies into `auth_service/src/auth_service/dependencies/` (e.g., `user_deps.py`). (This reflects refactoring from an earlier, flatter structure).
+  - [x] 0.6.c: Organize Pydantic models into a dedicated `auth_service/src/auth_service/schemas/` directory with submodules (e.g., `user_schemas.py`, `app_client_schemas.py`, `common_schemas.py`) and an `__init__.py` for exports. Consolidate FastAPI dependencies into `auth_service/src/auth_service/dependencies/` (e.g., `user_deps.py`).
 - [x] **0.7: Setup Alembic for Database Migrations (Auth Service Specific Schema)**
   - [x] 0.7.a: Initialize Alembic (`alembic init alembic`).
   - [x] 0.7.b: Configure `alembic/env.py` for asynchronous environment and to use `AUTH_SERVICE_DATABASE_URL`. Point `script.py.mako` to use the correct metadata object from `db.py`.
@@ -208,42 +208,42 @@ This TODO list breaks down the development of the Auth Service into manageable t
 - [x] **4.3: Define Admin Auth Dependency**
   - [x] 4.3.a: Create a FastAPI dependency that verifies if the current user (from Supabase JWT) has an 'admin' role (this role will be manually assigned initially or via a seeding script). This is a placeholder; full RBAC for admins comes later but basic protection is needed now.
   - [x] 4.3.b: Write unit tests for this dependency (mocking user roles).
-- [ ] **4.4: Create `app_client` (`POST /auth/admin/clients`) (Admin Protected)**
-  - [ ] 4.4.a: Define Pydantic models for request (`AppClientCreateRequest`) and response (`AppClientCreatedResponse` - including plain secret once).
-  - [ ] 4.4.b: Write integration tests:
+- [x] **4.4: Create `app_client` (`POST /auth/admin/clients`) (Admin Protected)**
+  - [x] 4.4.a: Define Pydantic models for request (`AppClientCreateRequest`) and response (`AppClientCreatedResponse` - including plain secret once).
+  - [x] 4.4.b: Write integration tests:
     - Successful creation, secret is returned.
     - Duplicate client name.
     - Unauthorized access (not admin).
-  - [ ] 4.4.c: Implement endpoint: Use admin dependency. Generate `client_id` (UUID), generate secure `client_secret`, hash it, store hash. Return plain secret once.
-  - [ ] 4.4.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
-- [ ] **4.5: List/Get `app_clients` (Admin Protected)**
-  - [ ] 4.5.a: Define Pydantic response models (`AppClientResponse` - no secret, `AppClientListResponse`).
-  - [ ] 4.5.b: Write integration tests for `GET /auth/admin/clients` and `GET /auth/admin/clients/{client_id}`:
+  - [x] 4.4.c: Implement endpoint: Use admin dependency. Generate `client_id` (UUID), generate secure `client_secret`, hash it, store hash. Return plain secret once.
+  - [x] 4.4.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
+- [x] **4.5: List/Get `app_clients` (Admin Protected)**
+  - [x] 4.5.a: Define Pydantic response models (`AppClientResponse` - no secret, `AppClientListResponse`).
+  - [x] 4.5.b: Write integration tests for `GET /auth/admin/clients` and `GET /auth/admin/clients/{client_id}`:
     - Successful retrieval.
     - Client not found.
     - Unauthorized access.
-  - [ ] 4.5.c: Implement endpoints using admin dependency.
-  - [ ] 4.5.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
-- [ ] **4.6: Update `app_client` (`PUT /auth/admin/clients/{client_id}`) (Admin Protected)**
-  - [ ] 4.6.a: Define Pydantic request model (`AppClientUpdateRequest`).
-  - [ ] 4.6.b: Write integration tests: successful update, client not found, unauthorized.
-  - [ ] 4.6.c: Implement endpoint using admin dependency.
-  - [ ] 4.6.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
-- [ ] **4.7: Delete `app_client` (`DELETE /auth/admin/clients/{client_id}`) (Admin Protected)**
-  - [ ] 4.7.a: Write integration tests: successful deletion, client not found, unauthorized.
-  - [ ] 4.7.b: Implement endpoint using admin dependency.
-  - [ ] 4.7.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
-- [ ] **4.8: `app_client` Token Acquisition (`POST /auth/token`)**
-  - [ ] 4.8.a: Define Pydantic request (`AppClientTokenRequest` - `grant_type`, `client_id`, `client_secret`) and response (`AccessTokenResponse`).
-  - [ ] 4.8.b: Write integration tests:
+  - [x] 4.5.c: Implement endpoints using admin dependency.
+  - [x] 4.5.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
+- [x] **4.6: Update `app_client` (`PUT /auth/admin/clients/{client_id}`) (Admin Protected)**
+  - [x] 4.6.a: Define Pydantic request model (`AppClientUpdateRequest`).
+  - [x] 4.6.b: Write integration tests: successful update, client not found, unauthorized.
+  - [x] 4.6.c: Implement endpoint using admin dependency.
+  - [x] 4.6.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
+- [x] **4.7: Delete `app_client` (`DELETE /auth/admin/clients/{client_id}`) (Admin Protected)**
+  - [x] 4.7.a: Write integration tests: successful deletion, client not found, unauthorized.
+  - [x] 4.7.b: Implement endpoint using admin dependency.
+  - [x] 4.7.c: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
+- [x] **4.8: `app_client` Token Acquisition (`POST /auth/token`)**
+  - [x] 4.8.a: Define Pydantic request (`AppClientTokenRequest` - `grant_type`, `client_id`, `client_secret`) and response (`AccessTokenResponse`).
+  - [x] 4.8.b: Write integration tests:
     - Successful token grant for active client with correct credentials.
     - Invalid `client_id` or `client_secret`.
     - Inactive client.
     - Missing parameters.
     - Incorrect `grant_type`.
     - Verify JWT claims (`sub`, `roles`, `permissions` - roles/perms will be empty initially).
-  - [ ] 4.8.c: Implement endpoint: Validate `grant_type=client_credentials`. Verify `client_id` and `client_secret` (using hashed secret). Fetch client's roles/permissions (will be empty for now). Generate M2M JWT.
-  - [ ] 4.8.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
+  - [x] 4.8.c: Implement endpoint: Validate `grant_type=client_credentials`. Verify `client_id` and `client_secret` (using hashed secret). Fetch client's roles/permissions (will be empty for now). Generate M2M JWT.
+  - [x] 4.8.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
 
 ## Phase 5: RBAC Implementation & Admin Endpoints
 

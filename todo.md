@@ -249,14 +249,14 @@ This TODO list breaks down the development of the Auth Service into manageable t
 
 Define `RoleCreate`, `RoleUpdate`, `RoleResponse`, `PermissionCreate`, `PermissionUpdate`, `PermissionResponse` Pydantic models.
 
-- [ ] **5.1: CRUD for `roles` (`/auth/admin/roles`) (Admin Protected)**
-  - [ ] 5.1.a: Write integration tests for `POST`, `GET` (list & single), `PUT`, `DELETE` for roles.
-  - [ ] 5.1.b: Implement CRUD endpoints for `roles` using admin dependency.
-  - [ ] 5.1.c: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
-- [ ] **5.2: CRUD for `permissions` (`/auth/admin/permissions`) (Admin Protected)**
-  - [ ] 5.2.a: Write integration tests for `POST`, `GET` (list & single), `PUT`, `DELETE` for permissions.
-  - [ ] 5.2.b: Implement CRUD endpoints for `permissions` using admin dependency.
-  - [ ] 5.2.c: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
+- [x] **5.1: CRUD for `roles` (`/auth/admin/roles`) (Admin Protected)**
+  - [x] 5.1.a: Write integration tests for `POST`, `GET` (list & single), `PUT`, `DELETE` for roles.
+  - [x] 5.1.b: Implement CRUD endpoints for `roles` using admin dependency.
+  - [x] 5.1.c: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
+- [x] **5.2: CRUD for `permissions` (`/auth/admin/permissions`) (Admin Protected)**
+  - [x] 5.2.a: Write integration tests for `POST`, `GET` (list & single), `PUT`, `DELETE` for permissions.
+  - [x] 5.2.b: Implement CRUD endpoints for `permissions` using admin dependency.
+  - [x] 5.2.c: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
 - [ ] **5.3: Assign/Remove Permissions from Roles (`/auth/admin/roles/{role_id}/permissions`) (Admin Protected)**
   - [ ] 5.3.a: Define Pydantic request for assigning permission ID.
   - [ ] 5.3.b: Write integration tests for `POST /auth/admin/roles/{role_id}/permissions/{permission_id}` (or with request body) and `DELETE /auth/admin/roles/{role_id}/permissions/{permission_id}`. Test for role/permission not found, already assigned/not assigned.

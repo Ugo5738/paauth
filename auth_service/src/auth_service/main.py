@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from auth_service.routers import admin_client_routes
+from auth_service.routers import admin_role_routes
+from auth_service.routers import admin_permission_routes
 from auth_service.config import settings
 from auth_service.schemas import MessageResponse
 from auth_service.routers.user_auth_routes import user_auth_router
@@ -36,6 +38,8 @@ app.add_middleware(
 app.include_router(user_auth_router)
 app.include_router(admin_client_routes.router)
 app.include_router(token_router)
+app.include_router(admin_role_routes.router, prefix="/auth/admin")
+app.include_router(admin_permission_routes.router, prefix="/auth/admin")
 
 # Exception handlers
 @app.exception_handler(HTTPException)

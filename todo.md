@@ -36,8 +36,9 @@ This TODO list breaks down the development of the Auth Service into manageable t
   - [x] 0.5.a: Create a Supabase utility module (`supabase_client.py`) to initialize and provide the `supabase-py` AsyncClient as a FastAPI dependency.
   - [x] 0.5.b: Write a test to verify Supabase client initialization (can mock actual connection for this unit test).
 - [x] **0.6: Define Core Pydantic Models**
-  - [x] 0.6.a: Define initial Pydantic models for common API responses (e.g., `MessageResponse`).
-  - [x] 0.6.b: Define Pydantic models for JWT payloads (`UserTokenData`, `AppClientTokenData`).
+  - [x] 0.6.a: Define initial Pydantic models in `auth_service/src/auth_service/schemas/common_schemas.py` (e.g., `MessageResponse`).
+  - [x] 0.6.b: Define Pydantic models for JWT payloads in `auth_service/src/auth_service/schemas/user_schemas.py` (e.g., `UserTokenData`) and `auth_service/src/auth_service/schemas/app_client_schemas.py` (e.g., `AppClientTokenData`).
+  - [x] 0.6.c: Organize Pydantic models into a dedicated `auth_service/src/auth_service/schemas/` directory with submodules (e.g., `user_schemas.py`, `app_client_schemas.py`, `common_schemas.py`) and an `__init__.py` for exports. Consolidate FastAPI dependencies into `auth_service/src/auth_service/dependencies/` (e.g., `user_deps.py`). (This reflects refactoring from an earlier, flatter structure).
 - [x] **0.7: Setup Alembic for Database Migrations (Auth Service Specific Schema)**
   - [x] 0.7.a: Initialize Alembic (`alembic init alembic`).
   - [x] 0.7.b: Configure `alembic/env.py` for asynchronous environment and to use `AUTH_SERVICE_DATABASE_URL`. Point `script.py.mako` to use the correct metadata object from `db.py`.
@@ -127,7 +128,7 @@ This TODO list breaks down the development of the Auth Service into manageable t
 ## Phase 2: Human User Authentication (Proxying Supabase)
 
 - [x] **2.1: User Registration (`POST /auth/users/register`)**
-  - [x] 2.1.a: Define Pydantic models for request (`UserCreate`) and response (`UserResponse` including profile info, `SupabaseUserSession`). (Covered by `UserCreateRequest`, `UserResponse` in `user_schemas.py`)
+  - [x] 2.1.a: Define Pydantic models in `auth_service/src/auth_service/schemas/user_schemas.py`: `UserCreateRequest` (for request) and `UserResponse` (for response, including profile info), `SupabaseSession` (for session data).
   - [x] 2.1.b: Write unit tests for any pre/post Supabase call logic (e.g., profile data preparation). (Implicitly covered by successful integration tests for profile creation path)
   - [x] 2.1.c: Write integration tests for the endpoint:
     - [x] Successful registration and profile creation.
@@ -137,7 +138,7 @@ This TODO list breaks down the development of the Auth Service into manageable t
   - [x] 2.1.d: Implement endpoint logic: call `supabase.auth.sign_up()`, then on success, create a local `profiles` entry. Handle Supabase errors.
   - [x] 2.1.e: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
 - [x] **2.2: User Login (Email/Password) (`POST /auth/users/login`)**
-  - [x] 2.2.a: Define Pydantic models for request (`UserLogin`) and response (`SupabaseUserSession`).
+  - [x] 2.2.a: Define Pydantic models in `auth_service/src/auth_service/schemas/user_schemas.py`: `UserLoginRequest` (for request) and `SupabaseSession` (for response).
   - [x] 2.2.b: Write integration tests:
     - Successful login.
     - Invalid credentials.
@@ -145,22 +146,22 @@ This TODO list breaks down the development of the Auth Service into manageable t
   - [x] 2.2.c: Implement endpoint logic: call supabase.auth.sign_in_with_password(). Handle Supabase errors and return session/user data.
   - [x] 2.2.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
 - [x] **2.3: User Login (Magic Link) (`POST /auth/users/login/magiclink`)**
-  - [x] 2.3.a: Define Pydantic model for request (`MagicLinkLoginRequest`).
+  - [x] 2.3.a: Define Pydantic model `MagicLinkLoginRequest` in `auth_service/src/auth_service/schemas/user_schemas.py`.
   - [x] 2.3.b: Write integration tests: successful request, invalid email.
   - [x] 2.3.c: Implement endpoint: call `supabase.auth.sign_in_with_otp()` (or equivalent for magic link).
   - [x] 2.3.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
 - [x] **2.4: User Logout (`POST /auth/users/logout`)**
-  - [x] 2.4.a: Implement FastAPI dependency to get current authenticated Supabase user from JWT.
+  - [x] 2.4.a: Implement FastAPI dependency `get_current_supabase_user` in `auth_service/src/auth_service/dependencies/user_deps.py` to get current authenticated Supabase user from JWT.
   - [x] 2.4.b: Write integration tests: successful logout, invalid/expired token.
   - [x] 2.4.c: Implement endpoint: require Supabase JWT, call `supabase.auth.sign_out()`.
   - [x] 2.4.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
 - [x] **2.5: Password Reset Request (`POST /auth/users/password/reset`)**
-  - [x] 2.5.a: Define Pydantic model for request (`PasswordResetRequest`).
+  - [x] 2.5.a: Define Pydantic model `PasswordResetRequest` in `auth_service/src/auth_service/schemas/user_schemas.py`.
   - [x] 2.5.b: Write integration tests: successful request, email not found, invalid email, Supabase API errors.
   - [x] 2.5.c: Implement the endpoint in `user_auth_routes.py`..
   - [x] 2.5.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
 - [x] **2.6: Password Update (`POST /auth/users/password/update`)**
-  - [x] 2.6.a: Define Pydantic model for request (`PasswordUpdateRequest`).
+  - [x] 2.6.a: Define Pydantic model `PasswordUpdateRequest` in `auth_service/src/auth_service/schemas/user_schemas.py`.
   - [x] 2.6.b: Write integration tests: successful update, weak new password (if Supabase enforces), invalid current token.
   - [x] 2.6.c: Implement endpoint: require Supabase JWT, call `supabase.auth.update_user()` with new password.
   - [x] 2.6.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
@@ -178,7 +179,7 @@ This TODO list breaks down the development of the Auth Service into manageable t
 ## Phase 3: User Profile Management (Auth Service Specific Data)
 
 - [ ] **3.1: Get User Profile (`GET /auth/users/me`)**
-  - [x] 3.1.a: Define Pydantic response model (`UserProfileResponse` - based on `profiles` table fields).
+  - [x] 3.1.a: Define Pydantic response model `ProfileResponse` in `auth_service/src/auth_service/schemas/user_schemas.py` (based on `profiles` table fields).
   - [x] 3.1.b: Write integration tests:
     - Successful retrieval for authenticated user.
     - User profile not found (edge case, should exist if registered via this service).
@@ -186,7 +187,7 @@ This TODO list breaks down the development of the Auth Service into manageable t
   - [x] 3.1.c: Implement endpoint: require Supabase JWT, extract `user_id`, fetch from local `profiles` table.
   - [x] 3.1.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
 - [x] **3.2: Update User Profile (`PUT /auth/users/me`)**
-  - [x] 3.2.a: Define Pydantic request model (`UserProfileUpdateRequest`).
+  - [x] 3.2.a: Define Pydantic request model `ProfileUpdate` in `auth_service/src/auth_service/schemas/user_schemas.py`.
   - [x] 3.2.b: Write integration tests: (Covered: successful full/partial updates, username conflict, unauthenticated access, basic Pydantic validation for request model)
     - Successful update.
     - Validation errors (e.g., invalid username format if rules apply).

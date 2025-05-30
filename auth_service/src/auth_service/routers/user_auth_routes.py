@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from gotrue.errors import AuthApiError as SupabaseAPIError
 from gotrue.types import UserAttributes
+from sqlalchemy.exc import SQLAlchemyError  # Added
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import SQLAlchemyError # Added
 from sqlalchemy.future import select
 from supabase._async.client import AsyncClient
 from supabase.lib.client_options import ClientOptions
@@ -20,6 +20,10 @@ from auth_service.dependencies import (  # Import for logout, settings, and toke
     oauth2_scheme,
 )
 from auth_service.models import Profile
+from auth_service.schemas.user_schemas import PasswordUpdateResponse  # Added
+from auth_service.schemas.user_schemas import (
+    UserProfileUpdateRequest,  # Added for profile updates
+)
 from auth_service.schemas.user_schemas import (  # Ensure all are present
     MagicLinkLoginRequest,
     MagicLinkSentResponse,
@@ -28,20 +32,19 @@ from auth_service.schemas.user_schemas import (  # Ensure all are present
     PasswordResetRequest,
     PasswordResetResponse,
     PasswordUpdateRequest,
-    PasswordUpdateResponse, # Added
     ProfileCreate,
     ProfileResponse,
-    UserProfileUpdateRequest, # Added for profile updates
     SupabaseSession,
     SupabaseUser,
     UserCreate,
-    UserResponse,
     UserLoginRequest,
+    UserResponse,
 )
 from auth_service.supabase_client import get_supabase_client
 
 from ..crud import user_crud
 from ..models.profile import Profile  # For type hinting
+
 # Removed redundant ProfileCreate import as it's in the block above
 
 logger = logging.getLogger(__name__)
@@ -54,16 +57,20 @@ router = APIRouter(
 
 # --- Profile CRUD Operations (Workaround: Placed here due to file creation issues) ---
 async def create_profile_in_db(
-    db_session: AsyncSession, profile_data: ProfileCreate, user_id: UUID # user_id param is kept for logging, but Profile uses profile_data.user_id
+    db_session: AsyncSession,
+    profile_data: ProfileCreate,
+    user_id: UUID,  # user_id param is kept for logging, but Profile uses profile_data.user_id
 ) -> Profile:
-    logger.info(f"Creating profile for user_id: {profile_data.user_id}") # Log using consistent ID
+    logger.info(
+        f"Creating profile for user_id: {profile_data.user_id}"
+    )  # Log using consistent ID
     db_profile = Profile(
         user_id=profile_data.user_id,  # Use user_id from Pydantic model
-        email=profile_data.email,      # Add email from Pydantic model
+        email=profile_data.email,  # Add email from Pydantic model
         username=profile_data.username,
         first_name=profile_data.first_name,
         last_name=profile_data.last_name,
-        is_active=True, # Default from model is True, this is fine
+        is_active=True,  # Default from model is True, this is fine
     )
     db_session.add(db_profile)
     try:
@@ -258,7 +265,7 @@ async def register_user(
             {
                 "email": user_in.email,
                 "password": user_in.password,
-                "options": {"data": user_metadata}
+                "options": {"data": user_metadata},
             }
         )
         logger.debug(f"Supabase sign_up response: {supa_response}")
@@ -505,17 +512,23 @@ async def request_password_reset(
 
 
 @router.post(
-    "/password/update", response_model=PasswordUpdateResponse, status_code=status.HTTP_200_OK # Changed response_model
+    "/password/update",
+    response_model=PasswordUpdateResponse,
+    status_code=status.HTTP_200_OK,  # Changed response_model
 )
 async def update_user_password(
     payload: PasswordUpdateRequest,
     supabase: AsyncClient = Depends(get_supabase_client),
-    current_user: SupabaseUser = Depends(get_current_supabase_user), # Removed token dependency
+    current_user: SupabaseUser = Depends(
+        get_current_supabase_user
+    ),  # Removed token dependency
 ):
     logger.info(f"Password update attempt for user: {current_user.email}")
     try:
         await supabase.auth.update_user(
-            attributes=UserAttributes(password=payload.new_password) # Removed jwt=token
+            attributes=UserAttributes(
+                password=payload.new_password
+            )  # Removed jwt=token
         )
         logger.info(f"Password updated successfully for user: {current_user.email}")
         return PasswordUpdateResponse(message="Password updated successfully.")
@@ -553,21 +566,21 @@ async def get_current_user_profile(
     Get the profile of the currently authenticated user.
     """
     logger.info(f"Fetching profile for current user: {current_user.id}")
-    
+
     # Use the user_crud function to get the profile
     profile = await user_crud.get_profile_by_user_id_from_db(
         db_session=db_session, user_id=current_user.id
     )
-    
+
     if not profile:
         logger.warning(f"Profile not found for user_id: {current_user.id}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Profile not found for user {current_user.id}",
         )
-    
+
     logger.info(f"Profile found for user_id: {current_user.id}. Returning profile.")
-    # FastAPI will automatically convert the SQLAlchemy 'profile' model 
+    # FastAPI will automatically convert the SQLAlchemy 'profile' model
     # to the 'ProfileResponse' Pydantic model due to the response_model annotation.
     return ProfileResponse.model_validate(profile)
 
@@ -581,12 +594,18 @@ async def update_current_user_profile(
     """
     Update the profile of the currently authenticated user.
     """
-    logger.info(f"User {current_user.id} attempting to update their profile. Request data (excluding unset): {request_data.model_dump(exclude_unset=True)}")
+    logger.info(
+        f"User {current_user.id} attempting to update their profile. Request data (excluding unset): {request_data.model_dump(exclude_unset=True)}"
+    )
 
     # 1. Fetch the current user's profile using the CRUD function
-    profile = await user_crud.get_profile_by_user_id_from_db(db_session, current_user.id)
+    profile = await user_crud.get_profile_by_user_id_from_db(
+        db_session, current_user.id
+    )
     if not profile:
-        logger.warning(f"Profile not found for user {current_user.id} during update attempt.")
+        logger.warning(
+            f"Profile not found for user {current_user.id} during update attempt."
+        )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User profile not found.",
@@ -596,16 +615,23 @@ async def update_current_user_profile(
 
     # If no data is provided in the request, return the current profile
     if not update_data:
-        logger.info(f"User {current_user.id}: No update data provided for profile. Returning current profile.")
+        logger.info(
+            f"User {current_user.id}: No update data provided for profile. Returning current profile."
+        )
         return ProfileResponse.model_validate(profile)
 
     # 2. Check for username conflict if username is being updated
     if "username" in update_data and update_data["username"] is not None:
-        new_username = str(update_data["username"]) # Ensure it's a string
+        new_username = str(update_data["username"])  # Ensure it's a string
         # Only check for conflict if the new username is different from the current one
         if new_username != profile.username:
-            existing_profile_with_username = await user_crud.get_profile_by_username(db_session, new_username)
-            if existing_profile_with_username and existing_profile_with_username.user_id != current_user.id:
+            existing_profile_with_username = await user_crud.get_profile_by_username(
+                db_session, new_username
+            )
+            if (
+                existing_profile_with_username
+                and existing_profile_with_username.user_id != current_user.id
+            ):
                 logger.warning(
                     f"User {current_user.id} attempted to update username to '{new_username}', "
                     f"which is already taken by user {existing_profile_with_username.user_id}."
@@ -614,35 +640,47 @@ async def update_current_user_profile(
                     status_code=status.HTTP_409_CONFLICT,
                     detail=f"Username '{new_username}' already exists.",
                 )
-    
+
     # 3. Update profile attributes if they have changed
     changed_fields_count = 0
     for field, value in update_data.items():
         if hasattr(profile, field) and getattr(profile, field) != value:
             setattr(profile, field, value)
             changed_fields_count += 1
-            logger.debug(f"User {current_user.id}: Profile field '{field}' will be updated to '{value}'")
+            logger.debug(
+                f"User {current_user.id}: Profile field '{field}' will be updated to '{value}'"
+            )
 
     # If no actual changes to the profile data, return the current profile
     if changed_fields_count == 0:
-        logger.info(f"User {current_user.id}: Provided data matches current profile values. No database update performed.")
+        logger.info(
+            f"User {current_user.id}: Provided data matches current profile values. No database update performed."
+        )
         return ProfileResponse.model_validate(profile)
 
     # 4. Commit changes (updated_at is handled by SQLAlchemy's onupdate=func.now())
     try:
         await db_session.commit()
         await db_session.refresh(profile)
-        logger.info(f"User {current_user.id} profile updated successfully. Changed fields: {changed_fields_count}")
-    except SQLAlchemyError as e: # More specific DB error
+        logger.info(
+            f"User {current_user.id} profile updated successfully. Changed fields: {changed_fields_count}"
+        )
+    except SQLAlchemyError as e:  # More specific DB error
         await db_session.rollback()
-        logger.error(f"Database error updating profile for user {current_user.id}: {e}", exc_info=True)
+        logger.error(
+            f"Database error updating profile for user {current_user.id}: {e}",
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Could not update profile due to a database error.",
         )
-    except Exception as e: # Catch-all for other unexpected errors
+    except Exception as e:  # Catch-all for other unexpected errors
         await db_session.rollback()
-        logger.error(f"Unexpected error updating profile for user {current_user.id}: {e}", exc_info=True)
+        logger.error(
+            f"Unexpected error updating profile for user {current_user.id}: {e}",
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while updating the profile.",
@@ -789,7 +827,7 @@ async def oauth_login_callback(
         # Clear the state cookie even if there's a provider error
         error_response = JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content={"detail": f"OAuth provider error: {error_detail}"}
+            content={"detail": f"OAuth provider error: {error_detail}"},
         )
         error_response.delete_cookie(
             key=settings.OAUTH_STATE_COOKIE_NAME,
@@ -805,13 +843,15 @@ async def oauth_login_callback(
             full_error_message += f" (code: {error})"
 
         # Prepare to delete cookie via headers
-        temp_response_for_cookie = Response() # fastapi.Response is starlette.responses.Response
+        temp_response_for_cookie = (
+            Response()
+        )  # fastapi.Response is starlette.responses.Response
         temp_response_for_cookie.delete_cookie(
             key=settings.OAUTH_STATE_COOKIE_NAME,
             httponly=True,
             secure=settings.ENVIRONMENT != "development",
             samesite="lax",
-            path="/", # Match the path used when setting
+            path="/",  # Match the path used when setting
         )
         delete_cookie_header = temp_response_for_cookie.headers.get("set-cookie")
         headers_for_exception = {}
@@ -832,7 +872,7 @@ async def oauth_login_callback(
         # Also clear cookie here if code is missing and no provider error
         missing_code_response = JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content={"detail": "Authorization code missing from OAuth callback."}
+            content={"detail": "Authorization code missing from OAuth callback."},
         )
         missing_code_response.delete_cookie(
             key=settings.OAUTH_STATE_COOKIE_NAME,
@@ -842,13 +882,15 @@ async def oauth_login_callback(
         )
         # To make the test pass, we need to raise HTTPException directly for now.
         # Prepare to delete cookie via headers
-        temp_response_for_cookie = Response() # fastapi.Response is starlette.responses.Response
+        temp_response_for_cookie = (
+            Response()
+        )  # fastapi.Response is starlette.responses.Response
         temp_response_for_cookie.delete_cookie(
             key=settings.OAUTH_STATE_COOKIE_NAME,
             httponly=True,
             secure=settings.ENVIRONMENT != "development",
             samesite="lax",
-            path="/", # Match the path used when setting
+            path="/",  # Match the path used when setting
         )
         delete_cookie_header = temp_response_for_cookie.headers.get("set-cookie")
         headers_for_exception = {}

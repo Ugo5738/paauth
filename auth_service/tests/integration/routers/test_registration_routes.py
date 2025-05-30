@@ -6,21 +6,22 @@ from uuid import UUID, uuid4
 # Third-party imports
 import pytest
 from fastapi import status
+from gotrue.errors import AuthApiError
 from httpx import AsyncClient
 from sqlalchemy import func as sql_func
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from gotrue.errors import AuthApiError
+
+# Test utilities
+from tests.utils import create_mock_supa_session, create_mock_supa_user
+
+from auth_service.config import settings as app_config_settings
 
 # Application-specific imports
 from auth_service.main import app
 from auth_service.models import Profile
-from auth_service.config import settings as app_config_settings
 from auth_service.routers.user_auth_routes import get_profile_by_user_id_from_db
 from auth_service.supabase_client import get_supabase_client as real_get_supabase_client
-
-# Test utilities
-from tests.utils import create_mock_supa_session, create_mock_supa_user
 
 
 @pytest.mark.asyncio
@@ -35,7 +36,9 @@ async def test_register_user_successful_email_confirmation_required(
     user_last_name = "UserConfirm"
 
     mock_user_data = create_mock_supa_user(
-        email=user_email, id_val=user_id, confirmed=False # email_confirmed_at will be None
+        email=user_email,
+        id_val=user_id,
+        confirmed=False,  # email_confirmed_at will be None
     )
     mock_session_data = create_mock_supa_session(user=mock_user_data)
 
@@ -59,8 +62,10 @@ async def test_register_user_successful_email_confirmation_required(
         mock_supabase_client.auth = mock_supabase_auth
         return mock_supabase_client
 
-    monkeypatch.setattr(app_config_settings, 'supabase_email_confirmation_required', True)
-    monkeypatch.setattr(app_config_settings, 'supabase_auto_confirm_new_users', False)
+    monkeypatch.setattr(
+        app_config_settings, "supabase_email_confirmation_required", True
+    )
+    monkeypatch.setattr(app_config_settings, "supabase_auto_confirm_new_users", False)
 
     original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
     app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
@@ -74,7 +79,9 @@ async def test_register_user_successful_email_confirmation_required(
         }
         response = await async_client.post("/auth/users/register", json=request_payload)
 
-        assert response.status_code == status.HTTP_201_CREATED, f"Response: {response.text}"
+        assert (
+            response.status_code == status.HTTP_201_CREATED
+        ), f"Response: {response.text}"
         response_data = response.json()
         assert (
             "user registration initiated. please check your email to confirm your account."
@@ -102,11 +109,12 @@ async def test_register_user_successful_email_confirmation_required(
             {
                 "email": user_email,
                 "password": user_password,
-                "options": {"data": expected_user_metadata}
+                "options": {"data": expected_user_metadata},
             }
         )
         db_profile = await get_profile_by_user_id_from_db(
-            db_session=db_session_for_crud, user_id=UUID(response_data["session"]["user"]["id"])
+            db_session=db_session_for_crud,
+            user_id=UUID(response_data["session"]["user"]["id"]),
         )
         assert db_profile is not None
         assert db_profile.username == user_username
@@ -155,8 +163,10 @@ async def test_register_user_successful_auto_confirmed(
         mock_supabase_client.auth = mock_supabase_auth
         return mock_supabase_client
 
-    monkeypatch.setattr(app_config_settings, 'supabase_email_confirmation_required', False)
-    monkeypatch.setattr(app_config_settings, 'supabase_auto_confirm_new_users', True)
+    monkeypatch.setattr(
+        app_config_settings, "supabase_email_confirmation_required", False
+    )
+    monkeypatch.setattr(app_config_settings, "supabase_auto_confirm_new_users", True)
 
     original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
     app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
@@ -170,7 +180,9 @@ async def test_register_user_successful_auto_confirmed(
         }
         response = await async_client.post("/auth/users/register", json=request_payload)
 
-        assert response.status_code == status.HTTP_201_CREATED, f"Response: {response.text}"
+        assert (
+            response.status_code == status.HTTP_201_CREATED
+        ), f"Response: {response.text}"
         response_data = response.json()
         assert response_data["message"] == "User registered successfully."
         assert response_data["session"]["user"]["id"] == str(user_id)
@@ -196,11 +208,12 @@ async def test_register_user_successful_auto_confirmed(
             {
                 "email": user_email,
                 "password": user_password,
-                "options": {"data": expected_user_metadata}
+                "options": {"data": expected_user_metadata},
             }
         )
         db_profile = await get_profile_by_user_id_from_db(
-            db_session=db_session_for_crud, user_id=UUID(response_data["session"]["user"]["id"])
+            db_session=db_session_for_crud,
+            user_id=UUID(response_data["session"]["user"]["id"]),
         )
         assert db_profile is not None
         assert db_profile.username == user_username
@@ -213,7 +226,9 @@ async def test_register_user_successful_auto_confirmed(
 
 
 @pytest.mark.asyncio
-async def test_register_user_email_already_exists(async_client: AsyncClient, monkeypatch):
+async def test_register_user_email_already_exists(
+    async_client: AsyncClient, monkeypatch
+):
     user_email = f"existing_{uuid4().hex[:8]}@example.com"
     mock_supabase_api_error = AuthApiError(
         message="User already registered", status=400, code="user_already_exists"
@@ -241,7 +256,9 @@ async def test_register_user_email_already_exists(async_client: AsyncClient, mon
                 "last_name": "User",
             },
         )
-        assert response.status_code == status.HTTP_409_CONFLICT, f"Response: {response.text}"
+        assert (
+            response.status_code == status.HTTP_409_CONFLICT
+        ), f"Response: {response.text}"
         response_data = response.json()
         assert "User with this email already exists" in response_data["detail"]
     finally:
@@ -262,10 +279,12 @@ async def test_register_user_invalid_password_format(async_client: AsyncClient):
             "password": "short",
             "username": "weakpassuser",
             "first_name": "Weak",
-            "last_name": "Password"
+            "last_name": "Password",
         },
     )
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, f"Response: {response.text}"
+    assert (
+        response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    ), f"Response: {response.text}"
     error_details = response.json()["detail"]
     assert isinstance(error_details, list)
     assert len(error_details) > 0
@@ -286,7 +305,9 @@ async def test_register_user_invalid_password_format(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_register_user_supabase_service_unavailable(async_client: AsyncClient, monkeypatch):
+async def test_register_user_supabase_service_unavailable(
+    async_client: AsyncClient, monkeypatch
+):
     async def mock_get_supabase_override_service_unavailable():
         mock_supabase_client = AsyncMock()
         mock_auth_object = MagicMock()
@@ -297,7 +318,7 @@ async def test_register_user_supabase_service_unavailable(async_client: AsyncCli
         mock_auth_object.sign_up = mock_sign_up_generic_error_func
         mock_supabase_client.auth = mock_auth_object
         return mock_supabase_client
-    
+
     original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
     app.dependency_overrides[real_get_supabase_client] = (
         mock_get_supabase_override_service_unavailable
@@ -310,10 +331,12 @@ async def test_register_user_supabase_service_unavailable(async_client: AsyncCli
                 "password": "ValidPassword123!",
                 "username": "unavailableuser",
                 "first_name": "Service",
-                "last_name": "Down"
+                "last_name": "Down",
             },
         )
-        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR, f"Response: {response.text}"
+        assert (
+            response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        ), f"Response: {response.text}"
         assert (
             "An unexpected error occurred during user registration."
             in response.json()["detail"]
@@ -324,4 +347,3 @@ async def test_register_user_supabase_service_unavailable(async_client: AsyncCli
         else:
             if real_get_supabase_client in app.dependency_overrides:
                 del app.dependency_overrides[real_get_supabase_client]
-

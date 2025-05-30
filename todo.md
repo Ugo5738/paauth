@@ -196,15 +196,17 @@ This TODO list breaks down the development of the Auth Service into manageable t
 
 ## Phase 4: `app_client` (M2M) Authentication & Management
 
-- [ ] **4.1: Client Secret Hashing Utilities**
-  - [ ] 4.1.a: Implement helper functions (`security.py`) to hash secrets (`passlib.hash.bcrypt.hash`) and verify secrets (`passlib.hash.bcrypt.verify`).
-  - [ ] 4.1.b: Write unit tests for these helper functions.
-- [ ] **4.2: M2M JWT Generation Utilities**
-  - [ ] 4.2.a: Implement helper function (`security.py`) to create M2M JWTs using `python-jose`, including `sub` (client_id), `roles`, `permissions`, `exp`, `iss`, `aud` claims, signed with `M2M_JWT_SECRET_KEY`.
-  - [ ] 4.2.b: Write unit tests for JWT creation and decoding (for verification).
-- [ ] **4.3: Define Admin Auth Dependency**
-  - [ ] 4.3.a: Create a FastAPI dependency that verifies if the current user (from Supabase JWT) has an 'admin' role (this role will be manually assigned initially or via a seeding script). This is a placeholder; full RBAC for admins comes later but basic protection is needed now.
-  - [ ] 4.3.b: Write unit tests for this dependency (mocking user roles).
+- [x] **4.1: Client Secret Hashing Utilities**
+  - [x] 4.1.a: Implement helper functions (`security.py`) to hash secrets (`passlib.hash.bcrypt.hash`) and verify secrets (`passlib.hash.bcrypt.verify`).
+  - [x] 4.1.b: Write unit tests for these helper functions.
+- [x] **4.2: M2M JWT Generation & Decoding Utilities**
+  - [x] 4.2.a: Implement `create_m2m_access_token` in `security.py` to generate JWTs with `sub` (client_id), `roles`, `permissions`, `exp`, `iss`, `aud` claims.
+  - [x] 4.2.b: Implement `decode_m2m_access_token` in `security.py` to validate and decode these JWTs, checking signature, expiry, issuer, and audience.
+  - [x] 4.2.c: Write unit tests for JWT creation and decoding (success, expiry, invalid signature, wrong issuer/audience).
+  - [x] 4.2.d: Ensure M2M JWT settings (secret, algorithm, issuer, audience, expiry) are in `config.py` and loaded from `.env`.
+- [x] **4.3: Define Admin Auth Dependency**
+  - [x] 4.3.a: Create a FastAPI dependency that verifies if the current user (from Supabase JWT) has an 'admin' role (this role will be manually assigned initially or via a seeding script). This is a placeholder; full RBAC for admins comes later but basic protection is needed now.
+  - [x] 4.3.b: Write unit tests for this dependency (mocking user roles).
 - [ ] **4.4: Create `app_client` (`POST /auth/admin/clients`) (Admin Protected)**
   - [ ] 4.4.a: Define Pydantic models for request (`AppClientCreateRequest`) and response (`AppClientCreatedResponse` - including plain secret once).
   - [ ] 4.4.b: Write integration tests:
@@ -335,4 +337,4 @@ Define `RoleCreate`, `RoleUpdate`, `RoleResponse`, `PermissionCreate`, `Permissi
 - [ ] **9.6: Comprehensive Test Suite Execution**
   - [ ] Run all unit and integration tests comprehensively using `docker-compose exec auth_service poetry run pytest --cov` and ensure high coverage.
 - [ ] **9.7: Final Code Review and Cleanup**
-  - [ ] 9.7.a: Review code for clarity, consistency, and adherence to best practices. Remove any unused code or test artifacts.
+      {{ ... }}

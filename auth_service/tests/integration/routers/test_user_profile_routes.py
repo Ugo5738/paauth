@@ -8,15 +8,20 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi import status
 from httpx import AsyncClient
+from sqlalchemy import text  # For raw SQL execution
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text # For raw SQL execution
+from tests.utils import create_mock_supa_user  # Test utility
 
 # Application-specific imports
 from auth_service.main import app
 from auth_service.models.profile import Profile  # SQLAlchemy model
-from auth_service.schemas.user_schemas import ProfileResponse, UserProfileUpdateRequest # Pydantic models
-from auth_service.routers.user_auth_routes import get_current_supabase_user # Dependency to mock
-from tests.utils import create_mock_supa_user # Test utility
+from auth_service.routers.user_auth_routes import (
+    get_current_supabase_user,  # Dependency to mock
+)
+from auth_service.schemas.user_schemas import (  # Pydantic models
+    ProfileResponse,
+    UserProfileUpdateRequest,
+)
 
 
 @pytest.mark.asyncio
@@ -40,7 +45,7 @@ async def test_get_user_profile_me_successful(
         {
             "id": mock_user_id,
             "email": mock_email,
-            "password": "dummy_password", # Content doesn't matter for this test
+            "password": "dummy_password",  # Content doesn't matter for this test
         },
     )
     # No commit needed here if using db_session_for_crud which might auto-commit or part of a larger test transaction
@@ -62,7 +67,7 @@ async def test_get_user_profile_me_successful(
     }
     new_profile = Profile(**profile_data)
     db_session_for_crud.add(new_profile)
-    await db_session_for_crud.commit() # This commit should handle both the user and profile if not committed before
+    await db_session_for_crud.commit()  # This commit should handle both the user and profile if not committed before
     await db_session_for_crud.refresh(new_profile)
 
     # 3. Mock the get_current_supabase_user dependency
@@ -75,14 +80,16 @@ async def test_get_user_profile_me_successful(
     try:
         # 4. Make the request to the endpoint
         response = await async_client.get(
-            "/auth/users/me", 
-            headers={"Authorization": "Bearer faketoken"} # Token is needed for dependency
+            "/auth/users/me",
+            headers={
+                "Authorization": "Bearer faketoken"
+            },  # Token is needed for dependency
         )
 
         # 5. Assertions
         assert response.status_code == status.HTTP_200_OK, response.text
         response_data = response.json()
-        
+
         # Validate against Pydantic model (implicitly done by parsing)
         profile_response = ProfileResponse(**response_data)
 
@@ -109,7 +116,7 @@ async def test_get_user_profile_me_successful(
 @pytest.mark.asyncio
 async def test_get_user_profile_me_profile_not_found(
     async_client: AsyncClient,
-    db_session_for_crud: AsyncSession, # db_session needed to ensure no profile exists
+    db_session_for_crud: AsyncSession,  # db_session needed to ensure no profile exists
     monkeypatch,
 ):
     """Test profile retrieval when authenticated user has no local profile (edge case)."""
@@ -132,8 +139,7 @@ async def test_get_user_profile_me_profile_not_found(
     try:
         # 4. Make the request
         response = await async_client.get(
-            "/auth/users/me",
-            headers={"Authorization": "Bearer faketoken"}
+            "/auth/users/me", headers={"Authorization": "Bearer faketoken"}
         )
 
         # 5. Assertions
@@ -194,7 +200,7 @@ async def test_update_user_profile_me_successful_full_update(
     # 2. Create an initial profile in the database
     initial_profile_data = {
         "user_id": mock_user_id,
-        "email": initial_email, # Email is part of the profile and should remain unchanged
+        "email": initial_email,  # Email is part of the profile and should remain unchanged
         "username": initial_username,
         "first_name": initial_first_name,
         "last_name": initial_last_name,
@@ -207,6 +213,7 @@ async def test_update_user_profile_me_successful_full_update(
 
     # 3. Mock the get_current_supabase_user dependency
     mock_supa_user = create_mock_supa_user(id_val=mock_user_id, email=initial_email)
+
     async def mock_get_current_user_override():
         return mock_supa_user
 
@@ -225,7 +232,9 @@ async def test_update_user_profile_me_successful_full_update(
         response = await async_client.put(
             "/auth/users/me",
             headers={"Authorization": "Bearer faketoken"},
-            json=update_payload.model_dump(exclude_unset=True) # Important: send only fields to update
+            json=update_payload.model_dump(
+                exclude_unset=True
+            ),  # Important: send only fields to update
         )
 
         # 6. Assertions on the response
@@ -234,20 +243,26 @@ async def test_update_user_profile_me_successful_full_update(
         updated_profile_response = ProfileResponse(**response_data)
 
         assert updated_profile_response.user_id == mock_user_id
-        assert updated_profile_response.email == initial_email # Email should not change
+        assert (
+            updated_profile_response.email == initial_email
+        )  # Email should not change
         assert updated_profile_response.username == update_payload.username
         assert updated_profile_response.first_name == update_payload.first_name
         assert updated_profile_response.last_name == update_payload.last_name
         assert updated_profile_response.is_active is True
-        assert updated_profile_response.updated_at >= profile_orm.updated_at # Check timestamp updated
+        assert (
+            updated_profile_response.updated_at >= profile_orm.updated_at
+        )  # Check timestamp updated
 
         # 7. Assertions on the database
-        await db_session_for_crud.refresh(profile_orm) # Refresh ORM model from DB
+        await db_session_for_crud.refresh(profile_orm)  # Refresh ORM model from DB
         assert profile_orm.username == update_payload.username
         assert profile_orm.first_name == update_payload.first_name
         assert profile_orm.last_name == update_payload.last_name
-        assert profile_orm.email == initial_email # Verify email unchanged in DB
-        assert profile_orm.updated_at == updated_profile_response.updated_at # Timestamps should match
+        assert profile_orm.email == initial_email  # Verify email unchanged in DB
+        assert (
+            profile_orm.updated_at == updated_profile_response.updated_at
+        )  # Timestamps should match
 
     finally:
         # Restore original dependency
@@ -300,6 +315,7 @@ async def test_update_user_profile_me_successful_partial_update_username(
 
     # 3. Mock authentication
     mock_supa_user = create_mock_supa_user(id_val=mock_user_id, email=initial_email)
+
     async def mock_get_current_user_override():
         return mock_supa_user
 
@@ -315,7 +331,7 @@ async def test_update_user_profile_me_successful_partial_update_username(
         response = await async_client.put(
             "/auth/users/me",
             headers={"Authorization": "Bearer faketoken"},
-            json=update_payload.model_dump(exclude_unset=True)
+            json=update_payload.model_dump(exclude_unset=True),
         )
 
         # 6. Assertions on the response
@@ -324,9 +340,9 @@ async def test_update_user_profile_me_successful_partial_update_username(
         updated_profile_response = ProfileResponse(**response_data)
 
         assert updated_profile_response.username == updated_username
-        assert updated_profile_response.first_name == initial_first_name # Unchanged
-        assert updated_profile_response.last_name == initial_last_name   # Unchanged
-        assert updated_profile_response.email == initial_email           # Unchanged
+        assert updated_profile_response.first_name == initial_first_name  # Unchanged
+        assert updated_profile_response.last_name == initial_last_name  # Unchanged
+        assert updated_profile_response.email == initial_email  # Unchanged
         assert updated_profile_response.user_id == mock_user_id
         assert updated_profile_response.is_active is True
         assert updated_profile_response.updated_at >= original_updated_at
@@ -360,10 +376,19 @@ async def test_update_user_profile_me_conflict_username_exists(
     user_a_initial_username = f"user_a_initial_{user_a_id.hex[:8]}"
 
     await db_session_for_crud.execute(
-        text("INSERT INTO auth.users (id, email, encrypted_password, role, aud) VALUES (:id, :email, 'password', 'authenticated', 'authenticated')"),
-        {"id": user_a_id, "email": user_a_email}
+        text(
+            "INSERT INTO auth.users (id, email, encrypted_password, role, aud) VALUES (:id, :email, 'password', 'authenticated', 'authenticated')"
+        ),
+        {"id": user_a_id, "email": user_a_email},
     )
-    profile_a_orm = Profile(user_id=user_a_id, email=user_a_email, username=user_a_initial_username, first_name="UserAFirst", last_name="UserALast", is_active=True)
+    profile_a_orm = Profile(
+        user_id=user_a_id,
+        email=user_a_email,
+        username=user_a_initial_username,
+        first_name="UserAFirst",
+        last_name="UserALast",
+        is_active=True,
+    )
     db_session_for_crud.add(profile_a_orm)
 
     # 2. Create User B (the one whose username User A wants to take)
@@ -372,20 +397,29 @@ async def test_update_user_profile_me_conflict_username_exists(
     existing_username_for_b = "already_taken_username"
 
     await db_session_for_crud.execute(
-        text("INSERT INTO auth.users (id, email, encrypted_password, role, aud) VALUES (:id, :email, 'password', 'authenticated', 'authenticated')"),
-        {"id": user_b_id, "email": user_b_email}
+        text(
+            "INSERT INTO auth.users (id, email, encrypted_password, role, aud) VALUES (:id, :email, 'password', 'authenticated', 'authenticated')"
+        ),
+        {"id": user_b_id, "email": user_b_email},
     )
-    profile_b_orm = Profile(user_id=user_b_id, email=user_b_email, username=existing_username_for_b, first_name="UserBFirst", last_name="UserBLast", is_active=True)
+    profile_b_orm = Profile(
+        user_id=user_b_id,
+        email=user_b_email,
+        username=existing_username_for_b,
+        first_name="UserBFirst",
+        last_name="UserBLast",
+        is_active=True,
+    )
     db_session_for_crud.add(profile_b_orm)
-    
+
     await db_session_for_crud.commit()
     await db_session_for_crud.refresh(profile_a_orm)
     await db_session_for_crud.refresh(profile_b_orm)
     user_a_original_updated_at = profile_a_orm.updated_at
 
-
     # 3. Mock authentication for User A
     mock_supa_user_a = create_mock_supa_user(id_val=user_a_id, email=user_a_email)
+
     async def mock_get_current_user_override():
         return mock_supa_user_a
 
@@ -400,19 +434,24 @@ async def test_update_user_profile_me_conflict_username_exists(
         response = await async_client.put(
             "/auth/users/me",
             headers={"Authorization": "Bearer faketoken"},
-            json=update_payload.model_dump(exclude_unset=True)
+            json=update_payload.model_dump(exclude_unset=True),
         )
 
         # 6. Assertions on the response
         assert response.status_code == status.HTTP_409_CONFLICT, response.text
         response_data = response.json()
         assert "detail" in response_data
-        assert f"Username '{existing_username_for_b}' already exists." in response_data["detail"]
+        assert (
+            f"Username '{existing_username_for_b}' already exists."
+            in response_data["detail"]
+        )
 
         # 7. Assertions on User A's database record (should be unchanged)
         await db_session_for_crud.refresh(profile_a_orm)
-        assert profile_a_orm.username == user_a_initial_username # Username unchanged
-        assert profile_a_orm.updated_at == user_a_original_updated_at # Timestamp unchanged
+        assert profile_a_orm.username == user_a_initial_username  # Username unchanged
+        assert (
+            profile_a_orm.updated_at == user_a_original_updated_at
+        )  # Timestamp unchanged
 
     finally:
         # Restore original dependency

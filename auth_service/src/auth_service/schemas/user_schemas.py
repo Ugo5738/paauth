@@ -2,12 +2,12 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 # --- Profile Schemas ---
 class ProfileBase(BaseModel):
-    email: EmailStr # Added email field
+    email: EmailStr  # Added email field
     username: Optional[str] = Field(None, max_length=50)
     first_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
@@ -24,7 +24,7 @@ class ProfileUpdate(ProfileBase):
     username: Optional[str] = Field(None, max_length=50)
     first_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
-    is_active: Optional[bool] = None # Allow updating active status
+    is_active: Optional[bool] = None  # Allow updating active status
 
 
 class ProfileResponse(ProfileBase):
@@ -37,28 +37,39 @@ class ProfileResponse(ProfileBase):
 
 
 class UserProfileUpdateRequest(BaseModel):
-    username: Optional[str] = Field(None, max_length=50, description="New username for the user.", examples=["new_username"])
-    first_name: Optional[str] = Field(None, max_length=100, description="New first name for the user.", examples=["NewFirstName"])
-    last_name: Optional[str] = Field(None, max_length=100, description="New last name for the user.", examples=["NewLastName"])
+    username: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="New username for the user.",
+        examples=["new_username"],
+    )
+    first_name: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="New first name for the user.",
+        examples=["NewFirstName"],
+    )
+    last_name: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="New last name for the user.",
+        examples=["NewLastName"],
+    )
 
     model_config = ConfigDict(
-        extra="forbid", # Do not allow extra fields in the request
-        validate_assignment=True, # Validate fields on assignment
-        json_schema_extra={ # OpenAPI examples
+        extra="forbid",  # Do not allow extra fields in the request
+        validate_assignment=True,  # Validate fields on assignment
+        json_schema_extra={  # OpenAPI examples
             "examples": [
                 {
                     "username": "johndoe_updated",
                     "first_name": "Johnathan",
                     "last_name": "Doe",
                 },
-                {
-                    "first_name": "Jane"
-                },
-                {
-                    "username": "new_user_name"
-                }
+                {"first_name": "Jane"},
+                {"username": "new_user_name"},
             ]
-        }
+        },
     )
 
 
@@ -96,9 +107,11 @@ class SupabaseSession(
 
     model_config = ConfigDict(from_attributes=True)
 
+
 from enum import Enum
 
 # --- User Authentication Schemas ---
+
 
 class OAuthProvider(str, Enum):
     GOOGLE = "google"
@@ -108,6 +121,7 @@ class OAuthProvider(str, Enum):
 
 class OAuthRedirectResponse(BaseModel):
     authorization_url: str
+
 
 class UserLoginRequest(BaseModel):
     email: EmailStr
@@ -131,7 +145,9 @@ class PasswordResetResponse(BaseModel):
 
 
 class PasswordUpdateRequest(BaseModel):
-    new_password: str = Field(..., min_length=8) # Enforce min_length, same as registration
+    new_password: str = Field(
+        ..., min_length=8
+    )  # Enforce min_length, same as registration
 
 
 class PasswordUpdateResponse(BaseModel):

@@ -173,9 +173,14 @@ async def test_logout_user_supabase_sign_out_error(
         headers = {"Authorization": f"Bearer {mock_token}"}
         response = await async_client.post("/auth/users/logout", headers=headers)
 
-        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR, f"Response: {response.text}" # Corrected
-        response_data = response.json() # Corrected
-        assert "Logout failed: Supabase server error during sign out" in response_data["detail"] # Corrected
+        assert (
+            response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        ), f"Response: {response.text}"  # Corrected
+        response_data = response.json()  # Corrected
+        assert (
+            "Logout failed: Supabase server error during sign out"
+            in response_data["detail"]
+        )  # Corrected
         # mock_logout_supabase_auth.sign_out.assert_called_once_with(jwt=mock_token) # Commented out
 
     finally:

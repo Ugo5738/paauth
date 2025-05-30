@@ -11,7 +11,7 @@ from auth_service.schemas.user_schemas import (
 
 
 def create_mock_supa_user(
-    email: str, id_val: UUID, confirmed: bool = False
+    email: str, id_val: UUID, confirmed: bool = False, user_roles: list[str] | None = None
 ) -> SupabaseUser:
     now_iso = "2023-01-01T00:00:00Z"
     confirmed_at_val = now_iso if confirmed else None
@@ -25,7 +25,7 @@ def create_mock_supa_user(
         confirmed_at=confirmed_at_val,  # Often alias for email_confirmed_at
         last_sign_in_at=confirmed_at_val,  # Can be None if never signed in
         app_metadata={},
-        user_metadata={},
+        user_metadata={"roles": user_roles} if user_roles else {},
         identities=[],
         created_at=now_iso,
         updated_at=now_iso,

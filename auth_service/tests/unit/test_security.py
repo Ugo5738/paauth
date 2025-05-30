@@ -10,7 +10,7 @@ from auth_service.security import (
     create_m2m_access_token,
     decode_m2m_access_token,
     hash_secret,
-    verify_secret,
+    verify_client_secret, # This was correctly changed
 )
 
 
@@ -28,7 +28,7 @@ def test_verify_secret_correct_password():
     """Test that verify_secret returns True for a correct password."""
     plain_secret = "mytestsecret"
     hashed_secret = hash_secret(plain_secret)
-    assert verify_secret(plain_secret, hashed_secret) is True
+    assert verify_client_secret(plain_secret, hashed_secret) is True # Changed
 
 
 def test_verify_secret_incorrect_password():
@@ -36,7 +36,7 @@ def test_verify_secret_incorrect_password():
     plain_secret = "mytestsecret"
     incorrect_secret = "wrongsecret"
     hashed_secret = hash_secret(plain_secret)
-    assert verify_secret(incorrect_secret, hashed_secret) is False
+    assert verify_client_secret(incorrect_secret, hashed_secret) is False # Changed
 
 
 def test_verify_secret_with_different_hashes():
@@ -46,15 +46,15 @@ def test_verify_secret_with_different_hashes():
     hash1 = hash_secret(secret)
     hash2 = hash_secret(secret)
     assert hash1 != hash2  # Hashes should be different due to different salts
-    assert verify_secret(secret, hash1) is True
-    assert verify_secret(secret, hash2) is True
+    assert verify_client_secret(secret, hash1) is True # This was correctly changed
+    assert verify_client_secret(secret, hash2) is True # This was correctly changed
 
 
 def test_verify_secret_empty_password():
     """Test verify_secret with an empty password."""
     plain_secret = ""
     hashed_secret = hash_secret(plain_secret)
-    assert verify_secret(plain_secret, hashed_secret) is True
+    assert verify_client_secret(plain_secret, hashed_secret) is True # Changed
 
 
 def test_verify_secret_empty_password_incorrect():
@@ -62,7 +62,7 @@ def test_verify_secret_empty_password_incorrect():
     plain_secret = ""
     incorrect_secret = "notempty"
     hashed_secret = hash_secret(plain_secret)
-    assert verify_secret(incorrect_secret, hashed_secret) is False
+    assert verify_client_secret(incorrect_secret, hashed_secret) is False # Changed
 
 
 # --- M2M JWT Tests ---

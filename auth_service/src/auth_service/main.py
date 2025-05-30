@@ -6,9 +6,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from auth_service.routers import admin_client_routes
 from auth_service.config import settings
 from auth_service.schemas import MessageResponse
 from auth_service.routers.user_auth_routes import user_auth_router
+from auth_service.routers.token_routes import router as token_router
 
 # Configure structured JSON logging
 logger = logging.getLogger("auth_service")
@@ -32,6 +34,8 @@ app.add_middleware(
 
 # Include Routers
 app.include_router(user_auth_router)
+app.include_router(admin_client_routes.router)
+app.include_router(token_router)
 
 # Exception handlers
 @app.exception_handler(HTTPException)

@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+import secrets # For generating client secrets
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
@@ -12,6 +13,14 @@ from auth_service.config import settings  # Import settings
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
+def generate_client_secret(n_bytes: int = 32) -> str:
+    """
+    Generates a cryptographically strong URL-safe text string for client secrets.
+    Default length is 32 bytes, resulting in a ~43 character string.
+    """
+    return secrets.token_urlsafe(n_bytes)
+
+
 def hash_secret(secret: str) -> str:
     """
     Hashes a secret string using bcrypt.
@@ -19,7 +28,7 @@ def hash_secret(secret: str) -> str:
     return pwd_context.hash(secret)
 
 
-def verify_secret(plain_secret: str, hashed_secret: str) -> bool:
+def verify_client_secret(plain_secret: str, hashed_secret: str) -> bool:
     """
     Verifies a plain secret against a hashed secret.
     Returns True if the secret matches, False otherwise.

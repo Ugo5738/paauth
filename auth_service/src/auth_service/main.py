@@ -5,6 +5,10 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
+from auth_service.rate_limiting import limiter, setup_rate_limiting
 
 from auth_service.routers import admin_client_routes
 from auth_service.routers import admin_role_routes
@@ -29,6 +33,9 @@ logger.setLevel(logging.INFO)
 
 app = FastAPI(root_path=settings.root_path)
 
+# Setup rate limiting
+setup_rate_limiting(app)
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -52,6 +59,36 @@ app.include_router(admin_client_role_routes.router, prefix="/auth/admin")
 async def http_exception_handler(request: Request, exc: HTTPException):
     logger.error(f"HTTPException: {exc.detail}")
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+# Rate limit exceeded exception handler
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    logger.warning(f"Rate limit exceeded: {request.client.host} - {request.url.path}")
+    # Extract retry seconds from the exception message if available
+    # Format is typically '5 per 1 minute'
+    retry_seconds = 60  # Default to 60 seconds
+    try:
+        limit_string = str(exc.detail) if hasattr(exc, 'detail') else str(exc)
+        parts = limit_string.split(' per ')
+        if len(parts) == 2 and 'minute' in parts[1]:
+            # Default retry window is 1 minute
+            retry_seconds = 60
+        elif len(parts) == 2 and 'hour' in parts[1]:
+            # For hourly rate limits
+            retry_seconds = 3600
+        elif len(parts) == 2 and 'day' in parts[1]:
+            # For daily rate limits
+            retry_seconds = 86400
+    except Exception as e:
+        logger.error(f"Error parsing rate limit message: {e}")
+        
+    return JSONResponse(
+        status_code=429,
+        content={
+            "detail": "Too many requests",
+            "retry_after": retry_seconds
+        }
+    )
 
 
 @app.exception_handler(RequestValidationError)

@@ -40,6 +40,7 @@ from auth_service.schemas.user_schemas import (  # Ensure all are present
     UserResponse,
 )
 from auth_service.supabase_client import get_supabase_client
+from auth_service.rate_limiting import limiter, LOGIN_LIMIT, REGISTRATION_LIMIT, PASSWORD_RESET_LIMIT
 
 from ..crud import user_crud
 from ..models.profile import Profile  # For type hinting
@@ -110,7 +111,9 @@ from auth_service.schemas.user_schemas import (  # Added for login and magic lin
 
 
 @router.post("/login", response_model=SupabaseSession, status_code=status.HTTP_200_OK)
+@limiter.limit(LOGIN_LIMIT, key_func=lambda request: request.client.host)
 async def login_user(
+    request: Request,
     login_data: UserLoginRequest,
     supabase: AsyncClient = Depends(get_supabase_client),
     settings: AppSettingsType = Depends(get_app_settings),
@@ -205,7 +208,9 @@ async def login_user(
     response_model=MagicLinkSentResponse,
     status_code=status.HTTP_200_OK,
 )
+@limiter.limit(LOGIN_LIMIT, key_func=lambda request: request.client.host)
 async def login_magic_link(
+    request: Request,
     request_data: MagicLinkLoginRequest,
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
@@ -247,7 +252,9 @@ async def login_magic_link(
 @router.post(
     "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )
+@limiter.limit(REGISTRATION_LIMIT, key_func=lambda request: request.client.host)
 async def register_user(
+    request: Request,
     user_in: UserCreate,
     supabase: AsyncClient = Depends(get_supabase_client),
     db_session: AsyncSession = Depends(get_db),
@@ -460,7 +467,9 @@ async def logout_user(
     response_model=PasswordResetResponse,
     status_code=status.HTTP_200_OK,
 )
+@limiter.limit(PASSWORD_RESET_LIMIT, key_func=lambda request: request.client.host)
 async def request_password_reset(
+    request: Request,
     payload: PasswordResetRequest,
     supabase: AsyncClient = Depends(get_supabase_client),
     settings_dep: AppSettingsType = Depends(

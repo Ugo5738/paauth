@@ -294,17 +294,17 @@ Define `RoleCreate`, `RoleUpdate`, `RoleResponse`, `PermissionCreate`, `Permissi
 
 ## Phase 7: Security, Middleware & Final Touches
 
-- [ ] **7.1: Rate Limiting Implementation (`slowapi`)**
-  - [ ] 7.1.a: Apply `slowapi` rate limiting to sensitive endpoints (login, token, registration, password reset).
-  - [ ] 7.1.b: Define sensible default limits (e.g., 5 requests per minute per IP) and ensure they are configurable via environment variables.
-  - [ ] 7.1.c: Write tests to verify rate limiting is active and responds with 429 when limits are exceeded.
-- [ ] **7.2: Final Security Review of Endpoints and Dependencies**
-  - [ ] 7.2.a: Ensure all admin-only endpoints properly use the admin auth dependency.
-  - [ ] 7.2.b: Ensure all user-authenticated endpoints properly validate the Supabase JWT.
-  - [ ] 7.2.c: Review input validation (Pydantic models) for all endpoints.
-- [ ] **7.3: Ensure HTTPS is Enforced (Deployment Concern)**
-  - [ ] 7.3.a: Document that production deployment must be behind a reverse proxy (e.g., Nginx, Traefik) that handles TLS termination and enforces HTTPS.
-  - [ ] 7.3.b: If using Uvicorn with `--ssl-keyfile` and `--ssl-certfile` for local HTTPS testing, document this.
+- [x] **7.1: Rate Limiting Implementation (`slowapi`)**
+  - [x] 7.1.a: Apply `slowapi` rate limiting to sensitive endpoints (login, token, registration, password reset).
+  - [x] 7.1.b: Define sensible default limits (e.g., 5 requests per minute per IP) and ensure they are configurable via environment variables.
+  - [x] 7.1.c: Write tests to verify rate limiting is active and responds with 429 when limits are exceeded.
+- [x] **7.2: Final Security Review of Endpoints and Dependencies**
+  - [x] 7.2.a: Ensure all admin-only endpoints properly use the admin auth dependency.
+  - [x] 7.2.b: Ensure all user-authenticated endpoints properly validate the Supabase JWT.
+  - [x] 7.2.c: Review input validation (Pydantic models) for all endpoints.
+- [x] **7.3: Ensure HTTPS is Enforced (Deployment Concern)**
+  - [x] 7.3.a: Document that production deployment must be behind a reverse proxy (e.g., Nginx, Traefik) that handles TLS termination and enforces HTTPS.
+  - [x] 7.3.b: If using Uvicorn with `--ssl-keyfile` and `--ssl-certfile` for local HTTPS testing, document this.
 
 ## Phase 8: Documentation
 

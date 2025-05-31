@@ -2,7 +2,7 @@ import logging
 import uuid
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +11,7 @@ from auth_service.db import get_db
 from auth_service.models.app_client import AppClient
 from auth_service.models.role import Role
 from auth_service.models.permission import Permission
+from auth_service.rate_limiting import limiter, TOKEN_LIMIT
 from auth_service.schemas.app_client_schemas import AppClientTokenRequest, AccessTokenResponse
 from auth_service.schemas.common_schemas import MessageResponse
 from auth_service.security import verify_client_secret, create_m2m_access_token
@@ -30,9 +31,12 @@ router = APIRouter(
     responses={
         status.HTTP_400_BAD_REQUEST: {"model": MessageResponse},
         status.HTTP_401_UNAUTHORIZED: {"model": MessageResponse},
+        status.HTTP_429_TOO_MANY_REQUESTS: {"model": MessageResponse},
     },
 )
+@limiter.limit(TOKEN_LIMIT, key_func=lambda request: request.client.host)
 async def get_client_token(
+    request: Request,
     token_request: AppClientTokenRequest,
     db: AsyncSession = Depends(get_db),
 ) -> AccessTokenResponse:

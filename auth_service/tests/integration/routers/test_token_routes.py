@@ -234,16 +234,18 @@ async def test_token_acquisition_with_multiple_roles_and_permissions(
         is_active=True
     )
     
-    # 2. Create multiple test roles and permissions
-    role1 = Role(name="admin_role", description="Admin role with full access")
-    role2 = Role(name="reader_role", description="Reader role with read-only access")
-    role3 = Role(name="writer_role", description="Writer role with write access")
+    # 2. Create multiple test roles and permissions with unique names
+    unique_suffix = str(uuid.uuid4())[:8]
     
-    perm1 = Permission(name="users:read", description="Can read user data")
-    perm2 = Permission(name="users:write", description="Can write user data")
-    perm3 = Permission(name="settings:read", description="Can read settings")
-    perm4 = Permission(name="settings:write", description="Can write settings")
-    perm5 = Permission(name="admin:access", description="Has admin access")
+    role1 = Role(name=f"admin_role_{unique_suffix}", description="Admin role with full access")
+    role2 = Role(name=f"reader_role_{unique_suffix}", description="Reader role with read-only access")
+    role3 = Role(name=f"writer_role_{unique_suffix}", description="Writer role with write access")
+    
+    perm1 = Permission(name=f"users:read_{unique_suffix}", description="Can read user data")
+    perm2 = Permission(name=f"users:write_{unique_suffix}", description="Can write user data")
+    perm3 = Permission(name=f"settings:read_{unique_suffix}", description="Can read settings")
+    perm4 = Permission(name=f"settings:write_{unique_suffix}", description="Can write settings")
+    perm5 = Permission(name=f"admin:access_{unique_suffix}", description="Has admin access")
     
     # 3. Add to database
     db_session_for_crud.add(app_client)
@@ -325,15 +327,15 @@ async def test_token_acquisition_with_multiple_roles_and_permissions(
     assert token_data["sub"] == str(client_id)
     
     # Verify all roles are present
-    assert "admin_role" in token_data["roles"]
-    assert "reader_role" in token_data["roles"]
-    assert "writer_role" in token_data["roles"]
+    assert role1.name in token_data["roles"]
+    assert role2.name in token_data["roles"]
+    assert role3.name in token_data["roles"]
     assert len(token_data["roles"]) == 3
     
     # Verify all permissions are present (no duplicates)
-    assert "users:read" in token_data["permissions"]
-    assert "users:write" in token_data["permissions"]
-    assert "settings:read" in token_data["permissions"]
-    assert "settings:write" in token_data["permissions"]
-    assert "admin:access" in token_data["permissions"]
+    assert perm1.name in token_data["permissions"]
+    assert perm2.name in token_data["permissions"]
+    assert perm3.name in token_data["permissions"]
+    assert perm4.name in token_data["permissions"]
+    assert perm5.name in token_data["permissions"]
     assert len(token_data["permissions"]) == 5  # Verify no duplicates

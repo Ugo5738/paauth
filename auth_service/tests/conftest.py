@@ -9,7 +9,7 @@ import pytest
 import pytest_asyncio
 from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import TIMESTAMP, Boolean, Column, String, Table, text
+from sqlalchemy import TIMESTAMP, Boolean, Column, String, Table, text, event
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -227,14 +227,18 @@ async def test_engine(apply_migrations_to_test_db: None) -> AsyncGenerator[Async
 async def db_session_for_crud(
     test_engine: AsyncEngine,
 ) -> AsyncGenerator[AsyncSession, None]:
-    """Create a test database session that properly manages transactions."""
-
+    """Create a test database session that properly manages transactions.
+    
+    This fixture uses a nested transaction pattern with savepoints to allow
+    tests to commit their changes while still ensuring all changes are rolled back
+    at the end of the test.
+    """
     # Create a connection that will be used for the entire test
     connection = await test_engine.connect()
-
-    # Start a transaction
-    transaction = await connection.begin()
-
+    
+    # Start an outer transaction that will be rolled back at the end
+    trans = await connection.begin()
+    
     # Create session bound to the connection
     async_session_maker = sessionmaker(
         bind=connection,
@@ -243,14 +247,29 @@ async def db_session_for_crud(
         autoflush=True,
         autocommit=False,
     )
-
+    
     session = async_session_maker()
-
+    
+    # Begin a nested transaction (savepoint)
+    try:
+        await session.begin_nested()
+    except Exception as e:
+        # Some drivers might not support nested transactions directly
+        # In that case, we'll use a different approach
+        print(f"Warning: begin_nested failed: {e}")
+        pass
+    
+    # If the inner transaction is committed, start a new one
+    @event.listens_for(session.sync_session, "after_transaction_end")
+    def end_savepoint(session_sync, transaction):
+        if transaction.nested and not transaction._parent.nested:
+            session.sync_session.begin_nested()
+    
     try:
         yield session
     finally:
         await session.close()
-        await transaction.rollback()  # Rollback the transaction
+        await trans.rollback()  # Roll back the outer transaction
         await connection.close()
 
 

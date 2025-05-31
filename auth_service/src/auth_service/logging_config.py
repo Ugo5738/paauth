@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any
 from fastapi import FastAPI, Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from auth_service.config import settings
+from auth_service.config import settings, Environment
 
 # Configure logger
 logger = logging.getLogger("auth_service")
@@ -84,7 +84,7 @@ class JsonFormatter(logging.Formatter):
 def setup_logging(app: FastAPI) -> None:
     """Configure logging for the application"""
     # Determine log level from settings
-    log_level = getattr(logging, settings.LOGGING_LEVEL.upper(), logging.INFO)
+    log_level = getattr(logging, settings.logging_level.upper(), logging.INFO)
     
     # Configure root logger
     root_logger = logging.getLogger()
@@ -99,7 +99,7 @@ def setup_logging(app: FastAPI) -> None:
     console_handler.setLevel(log_level)
     
     # Use JSON formatter in production, plain text in development
-    if settings.ENVIRONMENT == "production":
+    if settings.environment == Environment.PRODUCTION:
         formatter = JsonFormatter()
     else:
         formatter = logging.Formatter(
@@ -117,8 +117,8 @@ def setup_logging(app: FastAPI) -> None:
     app.add_middleware(RequestIdMiddleware)
     
     logger.info(
-        f"Logging configured with level {settings.LOGGING_LEVEL} "
-        f"and {'JSON' if settings.ENVIRONMENT == 'production' else 'plain text'} format"
+        f"Logging configured with level {settings.logging_level} "
+        f"and {'JSON' if settings.environment == Environment.PRODUCTION else 'plain text'} format"
     )
 
 

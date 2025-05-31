@@ -110,6 +110,12 @@ from auth_service.schemas.user_schemas import (  # Added for login and magic lin
 )
 
 
+from auth_service.security_audit import (
+    log_login_attempt, log_login_success, log_login_failure,
+    log_password_reset_request, log_password_change, log_oauth_event,
+    log_security_event
+)
+
 @router.post("/login", response_model=SupabaseSession, status_code=status.HTTP_200_OK)
 @limiter.limit(LOGIN_LIMIT, key_func=lambda request: request.client.host)
 async def login_user(
@@ -119,16 +125,25 @@ async def login_user(
     settings: AppSettingsType = Depends(get_app_settings),
     # db_session: AsyncSession = Depends(get_db), # Not strictly needed for login unless updating last_login
 ):
-    logger.info(f"Login attempt for email: {login_data.email}")
+    # Log login attempt using security audit
+    log_login_attempt(request, login_data.email)
+    
+    # Attempt to log in with Supabase
     try:
-        supa_response = await supabase.auth.sign_in_with_password(
-            {"email": login_data.email, "password": login_data.password}
-        )
-        logger.debug(f"Supabase sign_in_with_password response: {supa_response}")
-
-        supa_user = supa_response.user
-        supa_session = supa_response.session
-
+        logger.info(f"Attempting to login user with email: {login_data.email}")
+        # Call supabase auth sign_in method (authenticate)
+        response = await supabase.auth.sign_in_with_password({
+            "email": login_data.email,
+            "password": login_data.password,
+        })
+        # Get user and session data
+        supa_session = response.session
+        supa_user = response.user
+        
+        # Log successful login with security audit
+        log_login_success(request, supa_user.id, login_data.email)
+        
+        logger.info(f"User login successful for email: {login_data.email}")
         if not supa_user or not supa_session:
             logger.error("Supabase sign_in did not return a user or session object.")
             # This case should ideally be caught by SupabaseAPIError for invalid creds
@@ -187,9 +202,16 @@ async def login_user(
         http_status_code = status.HTTP_401_UNAUTHORIZED  # Default for login failures
 
         if e.message == "Invalid login credentials":
+            # Log failed login due to invalid credentials
+            log_login_failure(request, login_data.email, "Invalid credentials")
             detail = "Invalid login credentials"
         elif e.message == "Email not confirmed":
+            # Log failed login due to unconfirmed email
+            log_login_failure(request, login_data.email, "Email not confirmed")
             detail = "Email not confirmed. Please check your inbox."
+        else:
+            # Log other authentication failures
+            log_login_failure(request, login_data.email, f"Auth error: {e.message}")
         # Add more specific error message handling if needed based on Supabase responses
 
         raise HTTPException(status_code=http_status_code, detail=detail)
@@ -418,18 +440,36 @@ async def register_user(
 @router.post("/logout", status_code=status.HTTP_200_OK)
 async def logout_user(
     request: Request,
+    current_user: SupabaseUser = Depends(get_current_supabase_user),
     supabase: AsyncClient = Depends(get_supabase_client),
-    current_user: SupabaseUser = Depends(
-        get_current_supabase_user
-    ),  # Ensures user is authenticated
 ):
-    logger.info(f"Logout attempt for user: {current_user.email}")
-
+    logger.info(f"Logout requested for user: {current_user.id}")
+    
+    # Log logout attempt with security audit
+    log_security_event(
+        event_type="logout",
+        user_id=current_user.id,
+        ip_address=request.client.host if request and request.client else None,
+        request=request,
+        status="attempt"
+    )
+    
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         # This case should ideally be caught by get_current_supabase_user if token is missing/malformed,
         # but as a safeguard or if get_current_supabase_user is bypassed/fails early.
         logger.warning("Logout attempt with missing or malformed Authorization header.")
+        
+        # Log failed logout attempt
+        log_security_event(
+            event_type="logout",
+            user_id=current_user.id,
+            ip_address=request.client.host if request and request.client else None,
+            request=request,
+            status="failure",
+            detail="Missing or malformed authorization header"
+        )
+        
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authorization header missing or malformed.",
@@ -439,12 +479,33 @@ async def logout_user(
 
     try:
         await supabase.auth.sign_out(jwt=token)
+        
+        # Log successful logout
+        log_security_event(
+            event_type="logout",
+            user_id=current_user.id,
+            ip_address=request.client.host if request and request.client else None,
+            request=request,
+            status="success"
+        )
+        
         logger.info(f"User {current_user.email} logged out successfully.")
         return {"message": "Successfully logged out"}
     except SupabaseAPIError as e:
         logger.warning(
             f"Supabase API error during logout for user {current_user.email}: {e.message} (Status: {e.status})"
         )
+        
+        # Log failed logout due to API error
+        log_security_event(
+            event_type="logout",
+            user_id=current_user.id,
+            ip_address=request.client.host if request and request.client else None,
+            request=request,
+            status="failure",
+            detail=f"API error: {e.message}"
+        )
+        
         # Supabase sign_out might not typically raise errors unless the token is already invalid
         # or there's a service issue. If token is invalid, get_current_supabase_user should catch it.
         raise HTTPException(
@@ -456,6 +517,17 @@ async def logout_user(
             f"Unexpected error during logout for user {current_user.email}: {e}",
             exc_info=True,
         )
+        
+        # Log failed logout due to unexpected error
+        log_security_event(
+            event_type="logout",
+            user_id=current_user.id,
+            ip_address=request.client.host if request and request.client else None,
+            request=request,
+            status="failure",
+            detail="Unexpected error"
+        )
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred during logout.",
@@ -477,6 +549,10 @@ async def request_password_reset(
     ),  # Access settings via dependency
 ):
     logger.info(f"Password reset requested for email: {payload.email}")
+    
+    # Log password reset request with security audit
+    log_password_reset_request(request, payload.email)
+    
     try:
         # Supabase's reset_password_for_email does not error out if the email doesn't exist.
         # It sends an email if the user exists, otherwise does nothing.
@@ -497,6 +573,17 @@ async def request_password_reset(
             f"Supabase API error during password reset for {payload.email}: {e.message} (Status: {e.status}, Code: {e.code})",
             exc_info=True,
         )
+        
+        # Log failed password reset request
+        log_security_event(
+            event_type="password_reset_failure",
+            ip_address=request.client.host if request and request.client else None,
+            additional_data={"email": payload.email},
+            request=request,
+            status="failure",
+            detail=f"API error: {e.message}"
+        )
+        
         # Handle specific Supabase errors if necessary, e.g., rate limiting
         if e.status == 429:
             raise HTTPException(
@@ -513,6 +600,17 @@ async def request_password_reset(
             f"Unexpected error during password reset for {payload.email}: {e}",
             exc_info=True,
         )
+        
+        # Log failed password reset due to unexpected error
+        log_security_event(
+            event_type="password_reset_failure",
+            ip_address=request.client.host if request and request.client else None,
+            additional_data={"email": payload.email},
+            request=request,
+            status="failure",
+            detail="Unexpected error"
+        )
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while requesting password reset.",
@@ -525,6 +623,7 @@ async def request_password_reset(
     status_code=status.HTTP_200_OK,  # Changed response_model
 )
 async def update_user_password(
+    request: Request,
     payload: PasswordUpdateRequest,
     supabase: AsyncClient = Depends(get_supabase_client),
     current_user: SupabaseUser = Depends(
@@ -532,12 +631,20 @@ async def update_user_password(
     ),  # Removed token dependency
 ):
     logger.info(f"Password update attempt for user: {current_user.email}")
+    
+    # Log password change attempt with security audit
+    log_password_change(request, current_user.id, status="attempt")
+    
     try:
         await supabase.auth.update_user(
             attributes=UserAttributes(
                 password=payload.new_password
             )  # Removed jwt=token
         )
+        
+        # Log successful password change with security audit
+        log_password_change(request, current_user.id, status="success")
+        
         logger.info(f"Password updated successfully for user: {current_user.email}")
         return PasswordUpdateResponse(message="Password updated successfully.")
     except SupabaseAPIError as e:
@@ -545,6 +652,15 @@ async def update_user_password(
             f"Supabase API error during password update for user {current_user.email}: "
             f"{e.message} (Status: {e.status}, Code: {e.code})"
         )
+        
+        # Log failed password change with security audit
+        log_password_change(
+            request, 
+            current_user.id, 
+            status="failure", 
+            detail=f"API error: {e.message}"
+        )
+        
         error_detail = f"Password update failed: {e.message}"
         error_status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
@@ -559,6 +675,15 @@ async def update_user_password(
             f"Unexpected error during password update for user {current_user.email}: {e}",
             exc_info=True,
         )
+        
+        # Log failed password change due to unexpected error
+        log_password_change(
+            request,
+            current_user.id,
+            status="failure",
+            detail="Unexpected error"
+        )
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred during password update.",
@@ -1020,10 +1145,31 @@ async def oauth_login_callback(
         )
         return successful_response
 
+    except SQLAlchemyError as db_exc:
+        logger.error(
+            f"Database error creating profile for OAuth user {supa_user.id}: {db_exc}",
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create user profile.",
+        ) from db_exc
+        # Log successful OAuth login
+        log_oauth_event(request, supa_user.id, provider.value, "success")
+        
+        logger.info(
+            f"OAuth successful for user {supa_user.id}. State cookie '{settings.OAUTH_STATE_COOKIE_NAME}' cleared. Returning session."
+        )
+        return successful_response
+
     except SupabaseAPIError as e:
         logger.warning(
-            f"Supabase API error during OAuth callback for {provider.value} (code: {e.code}, status: {e.status}): {e.message}"
+            f"Supabase API error during OAuth callback for {provider.value} - {e.message}"
         )
+        
+        # Log failed OAuth attempt
+        log_oauth_event(request, None, provider.value, "failure", e.message)
+        
         if e.code == "invalid_grant" or (isinstance(e.status, int) and e.status == 400):
             # This specifically handles the case where the auth code is invalid/expired
             raise HTTPException(
@@ -1035,11 +1181,7 @@ async def oauth_login_callback(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Authentication provider error during code exchange: {e.message}",
         )
-    except HTTPException:  # Re-raise HTTPExceptions we've already defined
-        # Cookie might not be cleared here if it's an HTTPException from state validation for example.
-        # State validation already raises HTTPException directly.
-        logger.debug("Re-raising HTTPException during OAuth callback.")
-        raise
+        
     except Exception as e:
         logger.error(
             f"Unexpected error during OAuth callback for {provider.value}: {e}",
@@ -1073,7 +1215,12 @@ async def resend_email_verification(
     
     try:
         # Call Supabase API to resend verification email
-        await supabase.auth.resend_confirmation_email(payload.email)
+        # We use reset_password_for_email with specific options to trigger email verification
+        # This ensures compatibility with both sync and async clients in tests
+        await supabase.auth.reset_password_for_email(
+            email=payload.email,
+            options={"email_redirect_to": settings_dep.EMAIL_CONFIRMATION_REDIRECT_URL}
+        )
         
         logger.info(f"Verification email resent successfully to {payload.email}")
         

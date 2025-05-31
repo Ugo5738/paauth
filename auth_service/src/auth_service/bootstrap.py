@@ -313,11 +313,11 @@ async def bootstrap_admin_and_rbac(
         await assign_permissions_to_roles(db, role_ids, permission_ids)
         
         # 4. Create admin user if environment variables are set
-        if settings.INITIAL_ADMIN_EMAIL and settings.INITIAL_ADMIN_PASSWORD:
+        if settings.initial_admin_email and settings.initial_admin_password:
             admin_user = await create_admin_user(
                 supabase, 
-                settings.INITIAL_ADMIN_EMAIL, 
-                settings.INITIAL_ADMIN_PASSWORD
+                settings.initial_admin_email, 
+                settings.initial_admin_password
             )
             
             if admin_user:
@@ -332,7 +332,7 @@ async def bootstrap_admin_and_rbac(
             else:
                 logger.warning("Admin user creation failed or was skipped")
         else:
-            logger.info("Admin user creation skipped (INITIAL_ADMIN_EMAIL or INITIAL_ADMIN_PASSWORD not set)")
+            logger.info("Admin user creation skipped (initial_admin_email or initial_admin_password not set)")
         
         logger.info("Admin and RBAC bootstrapping completed successfully")
         return True

@@ -334,12 +334,12 @@ Define `RoleCreate`, `RoleUpdate`, `RoleResponse`, `PermissionCreate`, `Permissi
   - [ ] 9.1.b: Create optimized docker-compose.prod.yml for production-like deployments
   - [ ] 9.1.c: Test building and running the production Docker image locally
 
-- [ ] **9.2: Implement Admin and RBAC Bootstrapping**
-  - [ ] 9.2.a: Create a bootstrap.py module that runs during application startup
-  - [ ] 9.2.b: Implement automatic creation of initial admin user if none exists
-  - [ ] 9.2.c: Create core roles (admin, user, service) and base permissions automatically
-  - [ ] 9.2.d: Add configurable environment variables for initial admin credentials
-  - [ ] 9.2.e: Write tests to verify the bootstrapping process
+- [x] **9.2: Implement Admin and RBAC Bootstrapping**
+  - [x] 9.2.a: Create a bootstrap.py module that runs during application startup
+  - [x] 9.2.b: Implement automatic creation of initial admin user if none exists
+  - [x] 9.2.c: Create core roles (admin, user, service) and base permissions automatically
+  - [x] 9.2.d: Add configurable environment variables for initial admin credentials
+  - [x] 9.2.e: Write tests to verify the bootstrapping process
 
 - [x] **9.3: Production Logging and Monitoring**
   - [x] 9.3.a: Configure structured JSON logging for production
@@ -382,11 +382,11 @@ Define `RoleCreate`, `RoleUpdate`, `RoleResponse`, `PermissionCreate`, `Permissi
   - [ ] 10.1.b: Add tests to verify the resend functionality works correctly.
   - [ ] 10.1.c: Document the email verification flow in the API documentation.
 
-- [ ] **10.2: Enhanced Audit Logging**
-  - [ ] 10.2.a: Implement structured logging for security-critical events (login attempts, admin actions, etc.).
-  - [ ] 10.2.b: Add request IDs to all requests for better traceability.
-  - [ ] 10.2.c: Create a logging middleware that captures request and response metadata.
-  - [ ] 10.2.d: Ensure sensitive data is not logged (passwords, tokens, etc.).
+- [x] **10.2: Enhanced Audit Logging**
+  - [x] 10.2.a: Implement structured logging for security-critical events (login attempts, admin actions, etc.).
+  - [x] 10.2.b: Add request IDs to all requests for better traceability.
+  - [x] 10.2.c: Create a logging middleware that captures request and response metadata.
+  - [x] 10.2.d: Ensure sensitive data is not logged (passwords, tokens, etc.).
 
 - [ ] **10.3: Token Revocation Mechanism**
   - [ ] 10.3.a: Design and implement a token denylist/blocklist for critical revocation cases.

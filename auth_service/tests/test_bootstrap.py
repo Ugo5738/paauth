@@ -20,9 +20,9 @@ from auth_service.models.user_role import UserRole
 
 
 @pytest.mark.asyncio
-async def test_create_core_roles(async_session):
+async def test_create_core_roles(db_session_for_crud):
     # Test creating core roles
-    role_ids = await create_core_roles(async_session)
+    role_ids = await create_core_roles(db_session_for_crud)
     
     # Verify that we have the expected roles
     assert "admin" in role_ids
@@ -30,21 +30,21 @@ async def test_create_core_roles(async_session):
     assert "service" in role_ids
     
     # Verify roles are in the database
-    result = await async_session.execute(select(Role))
+    result = await db_session_for_crud.execute(select(Role))
     roles = result.scalars().all()
     assert len(roles) >= 3  # At least the core roles should exist
     
     # Verify idempotency - running again shouldn't create duplicates
-    role_ids_2 = await create_core_roles(async_session)
-    result = await async_session.execute(select(Role))
+    role_ids_2 = await create_core_roles(db_session_for_crud)
+    result = await db_session_for_crud.execute(select(Role))
     roles_after = result.scalars().all()
     assert len(roles) == len(roles_after)  # Should be the same count
 
 
 @pytest.mark.asyncio
-async def test_create_core_permissions(async_session):
+async def test_create_core_permissions(db_session_for_crud):
     # Test creating core permissions
-    perm_ids = await create_core_permissions(async_session)
+    perm_ids = await create_core_permissions(db_session_for_crud)
     
     # Verify that we have the expected permissions
     assert "users:read" in perm_ids
@@ -52,23 +52,23 @@ async def test_create_core_permissions(async_session):
     assert "role:admin_manage" in perm_ids
     
     # Verify permissions are in the database
-    result = await async_session.execute(select(Permission))
+    result = await db_session_for_crud.execute(select(Permission))
     perms = result.scalars().all()
     assert len(perms) >= 7  # At least the core permissions should exist
 
 
 @pytest.mark.asyncio
-async def test_assign_permissions_to_roles(async_session):
+async def test_assign_permissions_to_roles(db_session_for_crud):
     # First create roles and permissions
-    role_ids = await create_core_roles(async_session)
-    perm_ids = await create_core_permissions(async_session)
+    role_ids = await create_core_roles(db_session_for_crud)
+    perm_ids = await create_core_permissions(db_session_for_crud)
     
     # Test assigning permissions to roles
-    await assign_permissions_to_roles(async_session, role_ids, perm_ids)
+    await assign_permissions_to_roles(db_session_for_crud, role_ids, perm_ids)
     
     # Verify admin role has all permissions
     admin_role_id = role_ids["admin"]
-    result = await async_session.execute(
+    result = await db_session_for_crud.execute(
         select(RolePermission).where(RolePermission.role_id == admin_role_id)
     )
     admin_perms = result.scalars().all()
@@ -76,7 +76,7 @@ async def test_assign_permissions_to_roles(async_session):
     
     # Verify user role has only users:read permission
     user_role_id = role_ids["user"]
-    result = await async_session.execute(
+    result = await db_session_for_crud.execute(
         select(RolePermission).where(RolePermission.role_id == user_role_id)
     )
     user_perms = result.scalars().all()
@@ -92,6 +92,10 @@ async def test_create_admin_user():
     mock_user.email = "admin@example.com"
     mock_user.aud = "authenticated"
     mock_user.role = "authenticated"
+    mock_user.phone = None  # Fix: Set phone to None instead of letting it be a MagicMock
+    mock_user.email_confirmed_at = "2023-01-01T00:00:00Z"  # Add this required field
+    mock_user.phone_confirmed_at = None  # Add this required field
+    mock_user.last_sign_in_at = None  # Add this required field
     mock_user.app_metadata = {}
     mock_user.user_metadata = {}
     mock_user.identities = []
@@ -116,7 +120,7 @@ async def test_create_admin_user():
     # Verify admin user was created
     assert admin_user is not None
     assert admin_user.email == "admin@example.com"
-    assert admin_user.id == mock_user.id
+    assert str(admin_user.id) == mock_user.id  # Compare string representations
     
     # Verify Supabase client was called correctly
     mock_supabase.auth.admin.create_user.assert_called_once()
@@ -132,6 +136,9 @@ async def test_bootstrap_admin_and_rbac():
     mock_db = AsyncMock()
     mock_supabase = AsyncMock()
     
+    test_admin_email = "admin@example.com"
+    test_admin_password = "password123"
+    
     # Mock successful execution of all sub-functions
     with patch('auth_service.bootstrap.create_core_roles') as mock_create_roles, \
          patch('auth_service.bootstrap.create_core_permissions') as mock_create_perms, \
@@ -139,7 +146,8 @@ async def test_bootstrap_admin_and_rbac():
          patch('auth_service.bootstrap.create_admin_user') as mock_create_admin, \
          patch('auth_service.bootstrap.create_admin_profile') as mock_create_profile, \
          patch('auth_service.bootstrap.assign_admin_role_to_user') as mock_assign_role, \
-         patch('auth_service.config.settings') as mock_settings:
+         patch('auth_service.bootstrap.settings.initial_admin_email', test_admin_email), \
+         patch('auth_service.bootstrap.settings.initial_admin_password', test_admin_password):
         
         # Configure mocks
         mock_create_roles.return_value = {"admin": uuid.uuid4(), "user": uuid.uuid4()}
@@ -154,9 +162,7 @@ async def test_bootstrap_admin_and_rbac():
         mock_create_profile.return_value = True
         mock_assign_role.return_value = True
         
-        # Set environment variables
-        mock_settings.INITIAL_ADMIN_EMAIL = "admin@example.com"
-        mock_settings.INITIAL_ADMIN_PASSWORD = "password123"
+        # Settings are now directly patched via the mock decorators
         
         # Test bootstrap process
         success = await bootstrap_admin_and_rbac(mock_db, mock_supabase)

@@ -33,7 +33,9 @@ async def lifespan(app: FastAPI):
     logger.info("Starting application bootstrap process")
     
     # Get database session and Supabase client
-    async with AsyncSession(bind=next(get_db())._engine) as db:
+    db_generator = get_db()
+    try:
+        db = await anext(db_generator)
         supabase = get_supabase_client()
         
         # Run bootstrap process
@@ -42,6 +44,15 @@ async def lifespan(app: FastAPI):
             logger.info("Bootstrap process completed successfully")
         else:
             logger.warning("Bootstrap process completed with errors")
+    except Exception as e:
+        logger.error(f"Error during bootstrap process: {str(e)}")
+    finally:
+        try:
+            # Ensure we close the DB session if it was opened
+            if 'db_generator' in locals():
+                await db_generator.aclose()
+        except Exception as e:
+            logger.error(f"Error closing DB session: {str(e)}")
     
     logger.info("Application startup complete")
     yield
@@ -179,7 +190,7 @@ async def health(
     response = {
         "status": "ok",
         "version": app.version,
-        "environment": settings.ENVIRONMENT,
+        "environment": str(settings.environment),
         "timestamp": datetime.datetime.utcnow().isoformat(),
         "components": {
             "api": {

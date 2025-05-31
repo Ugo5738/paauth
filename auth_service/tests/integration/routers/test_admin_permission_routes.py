@@ -40,9 +40,10 @@ async def test_create_permission_success(
     app.dependency_overrides[get_current_supabase_user] = mock_get_admin_user_override
     
     try:
-        # 2. Create a new permission
+        # 2. Create a new permission with a unique name
+        unique_suffix = str(uuid.uuid4())[:8]
         permission_data = {
-            "name": "users:read",
+            "name": f"users:read:{unique_suffix}",
             "description": "Permission to read user data"
         }
         
@@ -81,8 +82,10 @@ async def test_create_permission_duplicate_name(
     db_session_for_crud: AsyncSession
 ):
     """Test creating a permission with a duplicate name."""
-    # 1. Setup: Create a permission and a mock admin user
-    existing_permission = Permission(name="users:write", description="Permission to write user data")
+    # 1. Setup: Create a permission and a mock admin user with unique name
+    unique_suffix = str(uuid.uuid4())[:8]
+    unique_perm_name = f"users:write:{unique_suffix}"
+    existing_permission = Permission(name=unique_perm_name, description="Permission to write user data")
     db_session_for_crud.add(existing_permission)
     await db_session_for_crud.commit()
     
@@ -110,7 +113,7 @@ async def test_create_permission_duplicate_name(
     try:
         # 2. Attempt to create a permission with the same name
         permission_data = {
-            "name": "users:write",  # Same name as existing permission
+            "name": unique_perm_name,  # Same name as existing permission
             "description": "This should fail"
         }
         

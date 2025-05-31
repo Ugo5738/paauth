@@ -1051,5 +1051,66 @@ async def oauth_login_callback(
         )
 
 
+# --- Email Verification Endpoints ---
+
+from auth_service.schemas.user_schemas import EmailVerificationRequest, MessageResponse
+
+@router.post("/verify/resend", response_model=MessageResponse, status_code=status.HTTP_200_OK)
+@limiter.limit(PASSWORD_RESET_LIMIT, key_func=lambda request: request.client.host)
+async def resend_email_verification(
+    request: Request,
+    payload: EmailVerificationRequest,
+    supabase: AsyncClient = Depends(get_supabase_client),
+    settings_dep: AppSettingsType = Depends(get_app_settings),
+):
+    """
+    Resend the email verification to a user.
+    
+    This endpoint allows users to request a new verification email if the original one was
+    not received or has expired. Rate limiting is applied to prevent abuse.
+    """
+    logger.info(f"Email verification resend requested for email: {payload.email}")
+    
+    try:
+        # Call Supabase API to resend verification email
+        await supabase.auth.resend_confirmation_email(payload.email)
+        
+        logger.info(f"Verification email resent successfully to {payload.email}")
+        
+        return MessageResponse(
+            message="Verification email resent. Please check your inbox."
+        )
+        
+    except SupabaseAPIError as e:
+        # Handle Supabase API errors
+        error_message = e.message
+        status_code = status.HTTP_400_BAD_REQUEST
+        
+        if e.status == 400 and "User not found" in error_message:
+            # Don't leak information about which emails exist
+            logger.warning(f"Attempted verification resend for non-existent email: {payload.email}")
+            return MessageResponse(
+                message="If your email exists in our system, a verification link has been sent."
+            )
+        elif e.status == 400 and "Email already confirmed" in error_message:
+            logger.info(f"Verification resend requested for already verified email: {payload.email}")
+            return MessageResponse(
+                message="Your email is already verified. You can now log in."
+            )
+        else:
+            logger.error(f"Supabase error during verification resend: {e.message} (Status: {e.status})")
+            status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+            raise HTTPException(
+                status_code=status_code,
+                detail=f"Error processing email verification resend: {error_message}"
+            )
+            
+    except Exception as e:
+        logger.error(f"Unexpected error during verification resend: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while processing your request."
+        )
+
 # Export the router to be used in main.py
 user_auth_router = router

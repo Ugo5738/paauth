@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  auth_service:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    image: auth-service:prod
+    container_name: auth-service-prod
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=production
+      - ROOT_PATH=/api/v1
+      - LOGGING_LEVEL=INFO
+    env_file:
+      - .env.production
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - auth_network
+      - supabase_network  # For connecting to self-hosted Supabase
+
+  # Redis for token revocation and rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: auth_redis_prod
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - auth_network
+
+# Commented out database service - when using self-hosted Supabase, you'll use its PostgreSQL database instead
+#  db:
+#    image: postgres:15
+#    container_name: auth-service-db-prod
+#    restart: unless-stopped
+#    environment:
+#      - POSTGRES_USER=postgres
+#      - POSTGRES_PASSWORD=${DB_PASSWORD}
+#      - POSTGRES_DB=postgres
+#    volumes:
+#      - auth_service_prod_data:/var/lib/postgresql/data
+#    healthcheck:
+#      test: ["CMD-SHELL", "pg_isready -U postgres"]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 5
+#    networks:
+#      - auth_network
+
+networks:
+  auth_network:
+    driver: bridge
+  supabase_network:
+    external: true  # This assumes the Supabase network already exists
+                    # Comment this out if not using self-hosted Supabase
+
+volumes:
+  redis_data:
+    driver: local
+#  auth_service_prod_data:  # Uncomment if using the local database

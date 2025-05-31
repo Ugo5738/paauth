@@ -1,14 +1,20 @@
-import logging
 import sys
+from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy.ext.asyncio import AsyncSession
+from supabase._async.client import AsyncClient
 
 from auth_service.rate_limiting import limiter, setup_rate_limiting
+from auth_service.bootstrap import bootstrap_admin_and_rbac
+from auth_service.db import get_db
+from auth_service.supabase_client import get_supabase_client
+from auth_service.logging_config import setup_logging, LoggingMiddleware, logger
 
 from auth_service.routers import admin_client_routes
 from auth_service.routers import admin_role_routes
@@ -21,21 +27,33 @@ from auth_service.schemas import MessageResponse
 from auth_service.routers.user_auth_routes import user_auth_router
 from auth_service.routers.token_routes import router as token_router
 
-# Configure structured JSON logging
-logger = logging.getLogger("auth_service")
-handler = logging.StreamHandler(sys.stdout)
-formatter = logging.Formatter(
-    '{"timestamp":"%(asctime)s", "level":"%(levelname)s", "name":"%(name)s", "message":"%(message)s"}'
-)
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-logger.setLevel(logging.INFO)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Run bootstrap process to create admin user and RBAC components
+    logger.info("Starting application bootstrap process")
+    
+    # Get database session and Supabase client
+    async with AsyncSession(bind=next(get_db())._engine) as db:
+        supabase = get_supabase_client()
+        
+        # Run bootstrap process
+        success = await bootstrap_admin_and_rbac(db, supabase)
+        if success:
+            logger.info("Bootstrap process completed successfully")
+        else:
+            logger.warning("Bootstrap process completed with errors")
+    
+    logger.info("Application startup complete")
+    yield
+    # Shutdown: Cleanup resources if needed
+    logger.info("Application shutting down")
 
 app = FastAPI(
     title="Authentication Service API",
     description="Authentication and Authorization service for managing users, application clients, roles, and permissions.",
     version="1.0.0",
     root_path=settings.root_path,
+    lifespan=lifespan,
     openapi_tags=[
         {
             "name": "User Authentication",
@@ -76,8 +94,14 @@ app = FastAPI(
     swagger_ui_parameters={"persistAuthorization": True}
 )
 
+# Setup logging configuration
+setup_logging(app)
+
 # Setup rate limiting
 setup_rate_limiting(app)
+
+# Add logging middleware (after request_id middleware which is added in setup_logging)
+app.add_middleware(LoggingMiddleware)
 
 # CORS
 app.add_middleware(
@@ -140,10 +164,69 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
-@app.get("/health", response_model=MessageResponse)
-async def health():
-    logger.info("Health check OK")
-    return {"message": "OK"}
+@app.get("/health")
+async def health(
+    db: AsyncSession = Depends(get_db),
+    supabase: AsyncClient = Depends(get_supabase_client)
+):
+    """
+    Health check endpoint that verifies the service and its dependencies are working.
+    Returns application status, version, and component health information.
+    """
+    import datetime
+    
+    # Initialize response object
+    response = {
+        "status": "ok",
+        "version": app.version,
+        "environment": settings.ENVIRONMENT,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "components": {
+            "api": {
+                "status": "ok"
+            }
+        }
+    }
+    
+    # Check database connectivity
+    try:
+        # Simple query to verify database connection
+        await db.execute("SELECT 1")
+        response["components"]["database"] = {
+            "status": "ok"
+        }
+    except Exception as e:
+        logger.error(f"Health check - Database error: {str(e)}")
+        response["components"]["database"] = {
+            "status": "error",
+            "message": "Database connection failed"
+        }
+        response["status"] = "degraded"
+    
+    # Check Supabase connectivity
+    try:
+        # Simple request to verify Supabase connection
+        await supabase.auth.get_user("invalid-token-just-for-testing")
+    except Exception as e:
+        # This will fail with an auth error, which is expected
+        # We just want to ensure we can reach Supabase
+        if "401" in str(e) or "invalid token" in str(e).lower():
+            response["components"]["supabase"] = {
+                "status": "ok"
+            }
+        else:
+            logger.error(f"Health check - Supabase error: {str(e)}")
+            response["components"]["supabase"] = {
+                "status": "error",
+                "message": "Supabase connection failed"
+            }
+            response["status"] = "degraded"
+    
+    # Set appropriate status code based on overall status
+    status_code = 200 if response["status"] == "ok" else 503
+    
+    logger.info(f"Health check completed with status: {response['status']}")
+    return JSONResponse(content=response, status_code=status_code)
 
 # Example error route for HTTPException handler
 @app.get("/error")

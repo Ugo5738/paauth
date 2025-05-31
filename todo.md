@@ -165,20 +165,21 @@ This TODO list breaks down the development of the Auth Service into manageable t
   - [x] 2.6.b: Write integration tests: successful update, weak new password (if Supabase enforces), invalid current token.
   - [x] 2.6.c: Implement endpoint: require Supabase JWT, call `supabase.auth.update_user()` with new password.
   - [x] 2.6.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
-    <!-- - [ ] **2.7: (If supporting) Social Logins (`GET /auth/users/login/{provider}`, `POST /auth/users/login/{provider}/callback`)** -->
-      <!-- - [x] 2.7.a: Define Pydantic models for callback if needed. -->
-      <!-- - [ ] 2.7.b: Write integration tests for initiation and callback (may require more complex mocking or test setup). -->
-      <!-- - [ ] 2.7.c: Implement endpoints: call `supabase.auth.sign_in_with_oauth()`, handle callback. -->
-      <!-- - [ ] 2.7.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'. -->
-    <!-- - [ ] **2.8: (If supporting) MFA Proxy Endpoints** -->
-      <!-- - [ ] 2.8.a: Research Supabase MFA flow (enroll, challenge, verify). Define Pydantic models. -->
-      <!-- - [ ] 2.8.b: Write integration tests for each MFA step. -->
-      <!-- - [ ] 2.8.c: Implement proxy endpoints to Supabase MFA functions. -->
-      <!-- - [ ] 2.8.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'. -->
+- [x] **2.7: OAuth Provider Login Initiation and Callback**
+  - [x] 2.7.a: Define Pydantic models for OAuth, including `OAuthProvider` enum and `OAuthRedirectResponse`.
+  - [x] 2.7.b: Write integration tests for OAuth login flows:
+    - [x] 2.7.b.1: Test OAuth callback with new users (profile creation)
+    - [x] 2.7.b.2: Test OAuth callback with existing users (profile retrieval)
+    - [x] 2.7.b.3: Test state validation and error handling
+  - [x] 2.7.c: Implement OAuth endpoints:
+    - [x] 2.7.c.1: Initiate endpoint to generate OAuth URL and set state cookie
+    - [x] 2.7.c.2: Callback endpoint to process provider response and create session
+    - [x] 2.7.c.3: Handle profile creation for new OAuth users
+  - [x] 2.7.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
 
 ## Phase 3: User Profile Management (Auth Service Specific Data)
 
-- [ ] **3.1: Get User Profile (`GET /auth/users/me`)**
+- [x] **3.1: Get User Profile (`GET /auth/users/me`)**
   - [x] 3.1.a: Define Pydantic response model `ProfileResponse` in `auth_service/src/auth_service/schemas/user_schemas.py` (based on `profiles` table fields).
   - [x] 3.1.b: Write integration tests:
     - Successful retrieval for authenticated user.
@@ -297,7 +298,9 @@ Define `RoleCreate`, `RoleUpdate`, `RoleResponse`, `PermissionCreate`, `Permissi
 - [x] **7.1: Rate Limiting Implementation (`slowapi`)**
   - [x] 7.1.a: Apply `slowapi` rate limiting to sensitive endpoints (login, token, registration, password reset).
   - [x] 7.1.b: Define sensible default limits (e.g., 5 requests per minute per IP) and ensure they are configurable via environment variables.
-  - [x] 7.1.c: Write tests to verify rate limiting is active and responds with 429 when limits are exceeded.
+  - [x] 7.1.c: Implement a test-aware rate limiting solution that disables rate limiting during tests to prevent test interference.
+  - [x] 7.1.d: Create a custom rate limit exceeded handler that provides useful information in the response.
+  - [x] 7.1.e: Write tests to verify rate limiting is active and responds with 429 when limits are exceeded.
 - [x] **7.2: Final Security Review of Endpoints and Dependencies**
   - [x] 7.2.a: Ensure all admin-only endpoints properly use the admin auth dependency.
   - [x] 7.2.b: Ensure all user-authenticated endpoints properly validate the Supabase JWT.
@@ -322,20 +325,83 @@ Define `RoleCreate`, `RoleUpdate`, `RoleResponse`, `PermissionCreate`, `Permissi
 
 ## Phase 9: Deployment Preparation & Finalization
 
-- [ ] **9.1: Create Dockerfile for the Auth Service**
-  - [ ] 9.1.a: Write a multi-stage Dockerfile for a lean, secure production image, using Poetry to install dependencies.
-  - [ ] 9.1.b: Test building the Docker image locally.
-- [ ] **9.2: Create `docker-compose.yml` for Local Development/Testing**
-  - [ ] 9.2.a: Include the auth service, a PostgreSQL instance (for `auth_service_data`), and potentially a local Supabase stack (if not using a hosted dev instance).
-  - [ ] 9.2.b: Ensure environment variables are passed correctly.
-- [ ] **9.3: Implement Initial Data Seeding (Admin User/Roles/Permissions)**
-  - [ ] 9.3.a: Develop a strategy for initial data seeding (e.g., an Alembic data migration, a CLI command `docker-compose exec auth_service poetry run python -m auth_service.seed`). This should create default roles (e.g., 'admin', 'user'), core permissions, and allow bootstrapping an initial admin user (either by assigning a role to a pre-registered Supabase user or creating a special app client).
-  - [ ] 9.3.b: Test the seeding process.
-- [ ] **9.4: Configure Production Logging**
-  - [ ] 9.4.a: Ensure logging levels and formats are configurable for production and capture necessary audit/debug info.
-- [ ] **9.5: Production Secret Management Strategy**
-  - [ ] 9.5.a: Document the strategy for managing production secrets (e.g., injected environment variables by PaaS/ orchestrator, Vault). Reiterate that `.env` files are not for production.
-- [ ] **9.6: Comprehensive Test Suite Execution**
-  - [ ] Run all unit and integration tests comprehensively using `docker-compose exec auth_service poetry run pytest --cov` and ensure high coverage.
-- [ ] **9.7: Final Code Review and Cleanup**
-      {{ ... }}
+- [ ] **9.1: Production Docker Configuration**
+  - [ ] 9.1.a: Write a multi-stage Dockerfile for a lean, secure production image:
+    - [ ] 9.1.a.1: Use Python 3.12 slim as base image
+    - [ ] 9.1.a.2: Install only production dependencies using Poetry
+    - [ ] 9.1.a.3: Implement proper user permissions (non-root user)
+    - [ ] 9.1.a.4: Configure reasonable health checks and defaults
+  - [ ] 9.1.b: Create optimized docker-compose.prod.yml for production-like deployments
+  - [ ] 9.1.c: Test building and running the production Docker image locally
+
+- [ ] **9.2: Implement Admin and RBAC Bootstrapping**
+  - [ ] 9.2.a: Create a bootstrap.py module that runs during application startup
+  - [ ] 9.2.b: Implement automatic creation of initial admin user if none exists
+  - [ ] 9.2.c: Create core roles (admin, user, service) and base permissions automatically
+  - [ ] 9.2.d: Add configurable environment variables for initial admin credentials
+  - [ ] 9.2.e: Write tests to verify the bootstrapping process
+
+- [x] **9.3: Production Logging and Monitoring**
+  - [x] 9.3.a: Configure structured JSON logging for production
+  - [x] 9.3.b: Implement request ID generation and tracking across components
+  - [x] 9.3.c: Add health check endpoints with appropriate metrics
+  - [x] 9.3.d: Document monitoring recommendations (e.g., Prometheus, Grafana)
+
+- [ ] **9.4: CI/CD Pipeline Setup**
+  - [ ] 9.4.a: Create GitHub Actions workflow for continuous integration:
+    - [ ] 9.4.a.1: Run linting and code quality checks
+    - [ ] 9.4.a.2: Execute test suite with coverage reporting
+    - [ ] 9.4.a.3: Build and validate Docker image
+  - [ ] 9.4.b: Create deployment workflow for continuous deployment:
+    - [ ] 9.4.b.1: Configure deployment to development environment on merged PRs
+    - [ ] 9.4.b.2: Setup manual approval for production deployments
+    - [ ] 9.4.b.3: Include database migration steps in deployment process
+
+- [ ] **9.5: Production Security Hardening**
+  - [ ] 9.5.a: Document production secret management strategy (environment variables, Vault, etc.)
+  - [ ] 9.5.b: Implement security headers middleware
+  - [ ] 9.5.c: Configure more restrictive CORS settings for production
+  - [ ] 9.5.d: Conduct a security review focusing on authentication endpoints
+
+- [ ] **9.6: Documentation and Handover**
+  - [ ] 9.6.a: Create comprehensive deployment documentation
+  - [ ] 9.6.b: Document scaling considerations and limitations
+  - [ ] 9.6.c: Prepare runbook for common operations and troubleshooting
+  - [ ] 9.6.d: Update API documentation with production-specific notes
+
+- [ ] **9.7: Final Quality Assurance**
+  - [ ] 9.7.a: Execute comprehensive test suite with high coverage targets
+  - [ ] 9.7.b: Perform code review focusing on security and reliability
+  - [ ] 9.7.c: Clean up any debug code, TODOs, or commented sections
+  - [ ] 9.7.d: Validate error handling consistency across all endpoints
+
+## Phase 10: Additional Security and Quality Improvements
+
+- [ ] **10.1: Email Verification Enhancement**
+  - [ ] 10.1.a: Implement email verification resend functionality at endpoint `/auth/users/verify/resend`.
+  - [ ] 10.1.b: Add tests to verify the resend functionality works correctly.
+  - [ ] 10.1.c: Document the email verification flow in the API documentation.
+
+- [ ] **10.2: Enhanced Audit Logging**
+  - [ ] 10.2.a: Implement structured logging for security-critical events (login attempts, admin actions, etc.).
+  - [ ] 10.2.b: Add request IDs to all requests for better traceability.
+  - [ ] 10.2.c: Create a logging middleware that captures request and response metadata.
+  - [ ] 10.2.d: Ensure sensitive data is not logged (passwords, tokens, etc.).
+
+- [ ] **10.3: Token Revocation Mechanism**
+  - [ ] 10.3.a: Design and implement a token denylist/blocklist for critical revocation cases.
+  - [ ] 10.3.b: Add an endpoint for token revocation (`POST /auth/token/revoke`).
+  - [ ] 10.3.c: Implement a Redis-based storage for the token denylist (optional, can use database initially).
+  - [ ] 10.3.d: Update token validation to check against the denylist.
+
+- [ ] **10.4: Multi-Factor Authentication**
+  - [ ] 10.4.a: Implement MFA enrollment endpoint (`POST /auth/users/mfa/enroll`).
+  - [ ] 10.4.b: Implement MFA challenge endpoint (`POST /auth/users/mfa/challenge`).
+  - [ ] 10.4.c: Update login flow to accommodate MFA verification.
+  - [ ] 10.4.d: Add tests for MFA enrollment and verification.
+
+- [ ] **10.5: Expanded Test Coverage**
+  - [ ] 10.5.a: Add more integration tests for admin endpoints.
+  - [ ] 10.5.b: Implement load testing for performance requirements.
+  - [ ] 10.5.c: Add security-focused tests (e.g., test rate limiting, token validation edge cases).
+

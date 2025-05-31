@@ -1,5 +1,16 @@
-from pydantic import ConfigDict, Field
+import os
+from enum import Enum
+from typing import Any, Literal
+
+from pydantic import ConfigDict, Field, field_validator
 from pydantic_settings import BaseSettings
+
+
+class Environment(str, Enum):
+    DEVELOPMENT = "development"
+    TESTING = "testing"
+    STAGING = "staging"
+    PRODUCTION = "production"
 
 
 class Settings(BaseSettings):
@@ -13,6 +24,26 @@ class Settings(BaseSettings):
     )
     supabase_auto_confirm_new_users: bool = Field(
         default=False, json_schema_extra={"env": "SUPABASE_AUTO_CONFIRM_NEW_USERS"}
+    )
+
+    # Self-hosted Supabase configuration
+    supabase_self_hosted: bool = Field(
+        default=False, json_schema_extra={"env": "SUPABASE_SELF_HOSTED"}
+    )
+    supabase_db_host: str | None = Field(
+        default=None, json_schema_extra={"env": "SUPABASE_DB_HOST"}
+    )
+    supabase_db_port: int = Field(
+        default=5432, json_schema_extra={"env": "SUPABASE_DB_PORT"}
+    )
+    supabase_db_name: str = Field(
+        default="postgres", json_schema_extra={"env": "SUPABASE_DB_NAME"}
+    )
+    supabase_db_user: str = Field(
+        default="postgres", json_schema_extra={"env": "SUPABASE_DB_USER"}
+    )
+    supabase_db_password: str | None = Field(
+        default=None, json_schema_extra={"env": "SUPABASE_DB_PASSWORD"}
     )
     m2m_jwt_secret_key: str = Field(
         ..., json_schema_extra={"env": "M2M_JWT_SECRET_KEY"}
@@ -75,6 +106,44 @@ class Settings(BaseSettings):
         default="http://localhost:3000/auth/update-password",
         json_schema_extra={"env": "PASSWORD_RESET_REDIRECT_URL"},
     )
+
+    # Environment configuration
+    environment: Environment = Field(
+        default=Environment.DEVELOPMENT, json_schema_extra={"env": "ENVIRONMENT"}
+    )
+
+    @field_validator("auth_service_database_url")
+    def validate_database_url(cls, v: str, info: Any) -> str:
+        # If we're using self-hosted Supabase, ensure the database URL is configured correctly
+        # This allows the auth service to connect to the same database as Supabase
+        self_hosted = getattr(info.data, "supabase_self_hosted", False)
+        if (
+            self_hosted
+            and not v
+            and all(
+                [
+                    info.data.get("supabase_db_host"),
+                    info.data.get("supabase_db_password"),
+                ]
+            )
+        ):
+            # Construct DB URL from self-hosted Supabase components
+            db_host = info.data.get("supabase_db_host")
+            db_port = info.data.get("supabase_db_port", 5432)
+            db_name = info.data.get("supabase_db_name", "postgres")
+            db_user = info.data.get("supabase_db_user", "postgres")
+            db_pass = info.data.get("supabase_db_password")
+            return f"postgresql+asyncpg://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
+        return v
+
+    def is_production(self) -> bool:
+        return self.environment == Environment.PRODUCTION
+
+    def is_development(self) -> bool:
+        return self.environment == Environment.DEVELOPMENT
+
+    def is_testing(self) -> bool:
+        return self.environment == Environment.TESTING
 
     model_config = ConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=False

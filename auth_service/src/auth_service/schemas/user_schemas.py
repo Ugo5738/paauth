@@ -144,6 +144,14 @@ class PasswordResetResponse(BaseModel):
     message: str
 
 
+class EmailVerificationRequest(BaseModel):
+    email: EmailStr
+    
+
+class MessageResponse(BaseModel):
+    message: str
+
+
 class PasswordUpdateRequest(BaseModel):
     new_password: str = Field(
         ..., min_length=8

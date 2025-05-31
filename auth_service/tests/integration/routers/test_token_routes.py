@@ -212,3 +212,128 @@ async def test_token_acquisition_invalid_grant_type(
     # FastAPI validation errors have a specific format
     assert response_data["detail"][0]["loc"][1] == "grant_type"
     assert "client_credentials" in response_data["detail"][0]["msg"].lower()
+
+
+@pytest.mark.asyncio
+async def test_token_acquisition_with_multiple_roles_and_permissions(
+    async_client: AsyncClient,
+    db_session_for_crud: AsyncSession
+):
+    """Test token acquisition with multiple roles and permissions to verify RBAC claims."""
+    # 1. Create test client
+    client_id = uuid.uuid4()
+    client_secret = generate_client_secret()
+    hashed_secret = hash_secret(client_secret)
+    
+    app_client = AppClient(
+        id=client_id,
+        client_name="Test Multiple RBAC Client",
+        client_secret_hash=hashed_secret,
+        description="Test client for multiple roles and permissions",
+        allowed_callback_urls=["http://localhost:8080/callback"],
+        is_active=True
+    )
+    
+    # 2. Create multiple test roles and permissions
+    role1 = Role(name="admin_role", description="Admin role with full access")
+    role2 = Role(name="reader_role", description="Reader role with read-only access")
+    role3 = Role(name="writer_role", description="Writer role with write access")
+    
+    perm1 = Permission(name="users:read", description="Can read user data")
+    perm2 = Permission(name="users:write", description="Can write user data")
+    perm3 = Permission(name="settings:read", description="Can read settings")
+    perm4 = Permission(name="settings:write", description="Can write settings")
+    perm5 = Permission(name="admin:access", description="Has admin access")
+    
+    # 3. Add to database
+    db_session_for_crud.add(app_client)
+    
+    for role in [role1, role2, role3]:
+        db_session_for_crud.add(role)
+    
+    for perm in [perm1, perm2, perm3, perm4, perm5]:
+        db_session_for_crud.add(perm)
+    
+    await db_session_for_crud.commit()
+    
+    # 4. Create role-permission associations
+    # admin_role: all permissions
+    # reader_role: read permissions only
+    # writer_role: write permissions only
+    role_permissions = [
+        # admin role has all permissions
+        RolePermission(role_id=role1.id, permission_id=perm1.id),
+        RolePermission(role_id=role1.id, permission_id=perm2.id),
+        RolePermission(role_id=role1.id, permission_id=perm3.id),
+        RolePermission(role_id=role1.id, permission_id=perm4.id),
+        RolePermission(role_id=role1.id, permission_id=perm5.id),
+        
+        # reader role has read permissions
+        RolePermission(role_id=role2.id, permission_id=perm1.id),
+        RolePermission(role_id=role2.id, permission_id=perm3.id),
+        
+        # writer role has write permissions
+        RolePermission(role_id=role3.id, permission_id=perm2.id),
+        RolePermission(role_id=role3.id, permission_id=perm4.id),
+    ]
+    
+    for rp in role_permissions:
+        db_session_for_crud.add(rp)
+    
+    await db_session_for_crud.commit()
+    
+    # 5. Assign roles to app client
+    from sqlalchemy import insert
+    from auth_service.models.app_client_role import AppClientRole
+    
+    # Assign all three roles to the client
+    for role in [role1, role2, role3]:
+        insert_stmt = insert(AppClientRole).values(
+            app_client_id=app_client.id,
+            role_id=role.id
+        )
+        await db_session_for_crud.execute(insert_stmt)
+    
+    await db_session_for_crud.commit()
+    
+    # 6. Request token
+    token_request = AppClientTokenRequest(
+        grant_type="client_credentials",
+        client_id=str(client_id),
+        client_secret=client_secret
+    )
+    
+    response = await async_client.post(
+        "/auth/token",
+        json=token_request.model_dump()
+    )
+    
+    # 7. Verify response
+    assert response.status_code == status.HTTP_200_OK
+    response_data = response.json()
+    
+    # 8. Validate token structure
+    token_response = AccessTokenResponse(**response_data)
+    assert token_response.token_type == "Bearer"
+    assert token_response.expires_in > 0
+    assert token_response.access_token is not None
+    
+    # 9. Decode and validate token claims for multiple roles and permissions
+    token_data = decode_m2m_access_token(token_response.access_token)
+    
+    # Verify client ID
+    assert token_data["sub"] == str(client_id)
+    
+    # Verify all roles are present
+    assert "admin_role" in token_data["roles"]
+    assert "reader_role" in token_data["roles"]
+    assert "writer_role" in token_data["roles"]
+    assert len(token_data["roles"]) == 3
+    
+    # Verify all permissions are present (no duplicates)
+    assert "users:read" in token_data["permissions"]
+    assert "users:write" in token_data["permissions"]
+    assert "settings:read" in token_data["permissions"]
+    assert "settings:write" in token_data["permissions"]
+    assert "admin:access" in token_data["permissions"]
+    assert len(token_data["permissions"]) == 5  # Verify no duplicates

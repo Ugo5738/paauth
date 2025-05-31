@@ -11,6 +11,7 @@ from auth_service.routers import admin_role_routes
 from auth_service.routers import admin_permission_routes
 from auth_service.routers import admin_role_permission_routes
 from auth_service.routers import admin_user_role_routes
+from auth_service.routers import admin_client_role_routes
 from auth_service.config import settings
 from auth_service.schemas import MessageResponse
 from auth_service.routers.user_auth_routes import user_auth_router
@@ -44,6 +45,7 @@ app.include_router(admin_role_routes.router, prefix="/auth/admin")
 app.include_router(admin_permission_routes.router, prefix="/auth/admin")
 app.include_router(admin_role_permission_routes.router, prefix="/auth/admin")
 app.include_router(admin_user_role_routes.router, prefix="/auth/admin")
+app.include_router(admin_client_role_routes.router, prefix="/auth/admin")
 
 # Exception handlers
 @app.exception_handler(HTTPException)

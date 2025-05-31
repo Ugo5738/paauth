@@ -267,14 +267,14 @@ Define `RoleCreate`, `RoleUpdate`, `RoleResponse`, `PermissionCreate`, `Permissi
   - [x] 5.4.b: Write integration tests for `POST /auth/admin/users/{user_id}/roles/{role_id}` and `DELETE /auth/admin/users/{user_id}/roles/{role_id}`. Test for user/role not found, already assigned/not assigned. (Note: `user_id` is Supabase `auth.users.id`).
   - [x] 5.4.c: Implement endpoints using admin dependency. Manage entries in `user_roles` table.
   - [x] 5.4.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
-- [ ] **5.5: Assign/Remove Roles for `app_clients` (`/auth/admin/clients/{client_id}/roles`) (Admin Protected)**
-  - [ ] 5.5.a: Define Pydantic request for assigning role ID.
-  - [ ] 5.5.b: Write integration tests for `POST /auth/admin/clients/{client_id}/roles/{role_id}` and `DELETE /auth/admin/clients/{client_id}/roles/{role_id}`. Test for client/role not found, already assigned/not assigned.
-  - [ ] 5.5.c: Implement endpoints using admin dependency. Manage entries in `app_client_roles` table.
-  - [ ] 5.5.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
-- [ ] **5.6: Refine Admin Auth Dependency**
-  - [ ] 5.6.a: Update the admin auth dependency created in 4.3.a to check for specific admin roles/permissions (e.g., `role:admin_manage` permission) once RBAC is in place.
-  - [ ] 5.6.b: Write/update unit tests for this refined dependency.
+- [x] **5.5: Assign/Remove Roles for `app_clients` (`/auth/admin/clients/{client_id}/roles`) (Admin Protected)**
+  - [x] 5.5.a: Define Pydantic request for assigning role ID.
+  - [x] 5.5.b: Write integration tests for `POST /auth/admin/clients/{client_id}/roles/{role_id}` and `DELETE /auth/admin/clients/{client_id}/roles/{role_id}`. Test for client/role not found, already assigned/not assigned.
+  - [x] 5.5.c: Implement endpoints using admin dependency. Manage entries in `app_client_roles` table.
+  - [x] 5.5.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
+- [x] **5.6: Refine Admin Auth Dependency**
+  - [x] 5.6.a: Update the admin auth dependency created in 4.3.a to check for specific admin roles/permissions (e.g., `role:admin_manage` permission) once RBAC is in place.
+  - [x] 5.6.b: Write/update unit tests for this refined dependency.
 
 ## Phase 6: JWT Customization & Claims
 

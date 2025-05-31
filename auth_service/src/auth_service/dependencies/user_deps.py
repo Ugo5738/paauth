@@ -84,18 +84,40 @@ async def require_admin_user(
     current_user: SupabaseUser = Depends(get_current_supabase_user),
 ) -> SupabaseUser:
     """
-    Dependency to ensure the current user has an 'admin' role.
-    Raises HTTPException 403 if the user is not an admin.
-    Returns the user object if they are an admin.
+    Dependency to ensure the current user has admin privileges.
+    Checks for:
+    1. Legacy 'admin' role in user_metadata
+    2. RBAC system: 'admin' role in user JWT claims
+    3. RBAC system: 'role:admin_manage' permission in user JWT claims
+    
+    Raises HTTPException 403 if the user does not have admin privileges.
+    Returns the user object if they have admin privileges.
     """
-    user_roles = current_user.user_metadata.get("roles", [])
-    if "admin" not in user_roles:
+    # Check legacy admin role in user_metadata
+    user_metadata_roles = current_user.user_metadata.get("roles", [])
+    
+    # Check RBAC roles and permissions in JWT claims
+    user_jwt_roles = current_user.app_metadata.get("roles", [])
+    user_jwt_permissions = current_user.app_metadata.get("permissions", [])
+    
+    # Check if user has admin privileges via any method
+    has_admin_role = "admin" in user_metadata_roles or "admin" in user_jwt_roles
+    has_admin_permission = "role:admin_manage" in user_jwt_permissions
+    
+    if not (has_admin_role or has_admin_permission):
         logger.warning(
-            f"Admin access denied for user {current_user.email}. Roles: {user_roles}"
+            f"Admin access denied for user {current_user.email}. "
+            f"Metadata roles: {user_metadata_roles}, "
+            f"JWT roles: {user_jwt_roles}, "
+            f"JWT permissions: {user_jwt_permissions}"
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User does not have admin privileges",
         )
-    logger.info(f"Admin access granted for user: {current_user.email}")
+    
+    logger.info(
+        f"Admin access granted for user: {current_user.email}. "
+        f"Admin role: {has_admin_role}, Admin permission: {has_admin_permission}"
+    )
     return current_user

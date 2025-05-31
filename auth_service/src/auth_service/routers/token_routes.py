@@ -28,10 +28,60 @@ router = APIRouter(
     response_model=AccessTokenResponse,
     status_code=status.HTTP_200_OK,
     summary="Obtain an access token using client credentials",
+    description="""
+    Implements the OAuth 2.0 Client Credentials grant flow for machine-to-machine (M2M) authentication.
+    
+    This endpoint allows authorized application clients to obtain JWT access tokens for API access.
+    The token contains claims about the client's identity and permissions, which are used for
+    authorization decisions by protected resources.
+    """,
     responses={
-        status.HTTP_400_BAD_REQUEST: {"model": MessageResponse},
-        status.HTTP_401_UNAUTHORIZED: {"model": MessageResponse},
-        status.HTTP_429_TOO_MANY_REQUESTS: {"model": MessageResponse},
+        status.HTTP_200_OK: {
+            "description": "Successfully generated access token",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                        "token_type": "Bearer",
+                        "expires_in": 900
+                    }
+                }
+            }
+        },
+        status.HTTP_400_BAD_REQUEST: {
+            "description": "Invalid request parameters",
+            "model": MessageResponse,
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Invalid grant_type. Only 'client_credentials' is supported."
+                    }
+                }
+            }
+        },
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication failed",
+            "model": MessageResponse,
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Invalid client credentials."
+                    }
+                }
+            }
+        },
+        status.HTTP_429_TOO_MANY_REQUESTS: {
+            "description": "Rate limit exceeded",
+            "model": MessageResponse,
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Too many requests",
+                        "retry_after": 60
+                    }
+                }
+            }
+        },
     },
 )
 @limiter.limit(TOKEN_LIMIT, key_func=lambda request: request.client.host)
@@ -43,11 +93,34 @@ async def get_client_token(
     """
     Obtain an access token using client credentials. This endpoint implements the OAuth2 client credentials grant type.
     
-    - **grant_type**: Must be 'client_credentials'.
-    - **client_id**: The client ID.
-    - **client_secret**: The client secret.
+    ## Request Parameters
+    - **grant_type**: Must be 'client_credentials'. No other grant types are currently supported.
+    - **client_id**: The UUID of the registered application client.
+    - **client_secret**: The secret key associated with the client. Must match the stored hashed value.
     
-    Returns an access token that can be used to authenticate machine-to-machine API requests.
+    ## Response
+    Returns a JSON object containing:
+    - **access_token**: A JWT token containing the client's identity and permissions.
+    - **token_type**: Always 'Bearer'.
+    - **expires_in**: Number of seconds until the token expires (typically 900 seconds / 15 minutes).
+    
+    ## Token Claims
+    The JWT token contains the following claims:
+    - Standard claims: iss, sub, aud, exp, iat, jti
+    - Custom claims: client_name, client_type, roles, permissions
+    
+    ## Error Handling
+    - Returns 400 for invalid grant_type
+    - Returns 401 for invalid client credentials or inactive clients
+    - Returns 429 when rate limits are exceeded
+    
+    ## Rate Limiting
+    This endpoint is rate-limited to prevent abuse. The default limit is configurable via environment variables.
+    
+    ## Security Notes
+    - Client secrets should be treated as sensitive credentials and never exposed in client-side code
+    - The resulting access token should be transmitted only over HTTPS
+    - Tokens have a limited lifetime and should be refreshed as needed
     """
     # Validate grant type
     if token_request.grant_type != "client_credentials":

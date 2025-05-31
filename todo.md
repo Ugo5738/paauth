@@ -308,17 +308,17 @@ Define `RoleCreate`, `RoleUpdate`, `RoleResponse`, `PermissionCreate`, `Permissi
 
 ## Phase 8: Documentation
 
-- [ ] **8.1: Generate/Update OpenAPI Documentation**
-  - [ ] 8.1.a: Ensure FastAPI's OpenAPI docs (`/docs`, `/redoc`) are comprehensive.
-  - [ ] 8.1.b: Add detailed descriptions, examples for request/response bodies, and auth requirements to endpoint docstrings.
-- [ ] **8.2: Document JWT Claims Structure**
-  - [ ] 8.2.a: Create documentation (e.g., in `README.md` or a `docs/` folder) detailing the claims structure for human user (Supabase) JWTs and `app_client` (M2M) JWTs.
-- [ ] **8.3: Document Supabase Custom Claims Setup**
-  - [ ] 8.3.a: Document the SQL function and the Supabase configuration steps for custom claims.
-- [ ] **8.4: Document Environment Variables**
-  - [ ] 8.4.a: Ensure `.env.example` is complete and `README.md` lists all required environment variables and their purpose.
-- [ ] **8.5: Document Admin Bootstrapping / Seeding**
-  - [ ] 8.5.a: Document the process for creating the first admin user or assigning admin roles (developed in Phase 9).
+- [x] **8.1: Generate/Update OpenAPI Documentation**
+  - [x] 8.1.a: Ensure FastAPI's OpenAPI docs (`/docs`, `/redoc`) are comprehensive.
+  - [x] 8.1.b: Add detailed descriptions, examples for request/response bodies, and auth requirements to endpoint docstrings.
+- [x] **8.2: Document JWT Claims Structure**
+  - [x] 8.2.a: Create documentation (e.g., in `README.md` or a `docs/` folder) detailing the claims structure for human user (Supabase) JWTs and `app_client` (M2M) JWTs.
+- [x] **8.3: Document Supabase Custom Claims Setup**
+  - [x] 8.3.a: Document the SQL function and the Supabase configuration steps for custom claims.
+- [x] **8.4: Document Environment Variables**
+  - [x] 8.4.a: Ensure `.env.example` is complete and `README.md` lists all required environment variables and their purpose.
+- [x] **8.5: Document Admin Bootstrapping / Seeding**
+  - [x] 8.5.a: Document how the initial admin user is created and how the core RBAC components are seeded.
 
 ## Phase 9: Deployment Preparation & Finalization
 

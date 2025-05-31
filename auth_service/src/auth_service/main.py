@@ -31,7 +31,50 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
-app = FastAPI(root_path=settings.root_path)
+app = FastAPI(
+    title="Authentication Service API",
+    description="Authentication and Authorization service for managing users, application clients, roles, and permissions.",
+    version="1.0.0",
+    root_path=settings.root_path,
+    openapi_tags=[
+        {
+            "name": "User Authentication",
+            "description": "Operations for user authentication including login, registration, password management, and profile management."
+        },
+        {
+            "name": "Token Acquisition",
+            "description": "Operations for obtaining authentication tokens for machine-to-machine (M2M) communication."
+        },
+        {
+            "name": "Admin - App Clients",
+            "description": "Administrative operations for managing application clients."
+        },
+        {
+            "name": "Admin - Roles",
+            "description": "Administrative operations for managing roles."
+        },
+        {
+            "name": "Admin - Permissions",
+            "description": "Administrative operations for managing permissions."
+        },
+        {
+            "name": "Admin - Role Permissions",
+            "description": "Administrative operations for assigning permissions to roles."
+        },
+        {
+            "name": "Admin - User Roles",
+            "description": "Administrative operations for assigning roles to users."
+        },
+        {
+            "name": "Admin - Client Roles",
+            "description": "Administrative operations for assigning roles to application clients."
+        },
+    ],
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    swagger_ui_parameters={"persistAuthorization": True}
+)
 
 # Setup rate limiting
 setup_rate_limiting(app)

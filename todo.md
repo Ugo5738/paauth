@@ -278,19 +278,19 @@ Define `RoleCreate`, `RoleUpdate`, `RoleResponse`, `PermissionCreate`, `Permissi
 
 ## Phase 6: JWT Customization & Claims
 
-- [ ] **6.1: PostgreSQL Function for Supabase JWT Custom Claims `get_user_rbac_claims(user_id UUID)`**
-  - [ ] 6.1.a: Design the SQL function to query `user_roles`, `role_permissions`, `roles`, `permissions` tables (in `auth_service_data` schema) to aggregate roles and permissions for a given `user_id`.
-  - [ ] 6.1.b: Write the SQL function. It should return JSON like `{"roles": ["role_name_1"], "permissions": ["perm_slug_1"]}`.
-  - [ ] 6.1.c: Test the SQL function directly in PostgreSQL with sample data.
-- [ ] **6.2: Apply and Configure Supabase Custom Claims**
-  - [ ] 6.2.a: Apply the `get_user_rbac_claims` function to the Supabase PostgreSQL database.
-  - [ ] 6.2.b: Research and implement the Supabase configuration (e.g., Auth Hooks, `config.toml`, or triggers) to call this function and add its output to JWTs during user login/token refresh. Document this setup clearly.
-  - [ ] 6.2.c: Manually test the human user login flow and inspect the Supabase JWT to ensure custom claims are present.
-- [ ] **6.3: Update `app_client` Token Generation to Include RBAC Claims**
-  - [ ] 6.3.a: Modify the `POST /auth/token` endpoint (Task 4.8.c) to fetch the `app_client`'s assigned roles and their associated permissions.
-  - [ ] 6.3.b: Update the M2M JWT generation utility (Task 4.2.a) to include these roles and permissions in the `app_client` JWT.
-  - [ ] 6.3.c: Update integration tests for `POST /auth/token` (Task 4.8.b) to verify the presence and correctness of roles and permissions claims in the M2M JWT.
-  - [ ] 6.3.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
+- [x] **6.1: PostgreSQL Function for Supabase JWT Custom Claims `get_user_rbac_claims(user_id UUID)`**
+  - [x] 6.1.a: Design the SQL function to query `user_roles`, `role_permissions`, `roles`, `permissions` tables (in `auth_service_data` schema) to aggregate roles and permissions for a given `user_id`.
+  - [x] 6.1.b: Write the SQL function. It should return JSON like `{"roles": ["role_name_1"], "permissions": ["perm_slug_1"]}`.
+  - [x] 6.1.c: Test the SQL function directly in PostgreSQL with sample data.
+- [x] **6.2: Apply and Configure Supabase Custom Claims**
+  - [x] 6.2.a: Apply the `get_user_rbac_claims` function to the Supabase PostgreSQL database.
+  - [x] 6.2.b: Research and implement the Supabase configuration (e.g., Auth Hooks, `config.toml`, or triggers) to call this function and add its output to JWTs during user login/token refresh. Document this setup clearly.
+  - [x] 6.2.c: Manually test the human user login flow and inspect the Supabase JWT to ensure custom claims are present.
+- [x] **6.3: Update `app_client` Token Generation to Include RBAC Claims**
+  - [x] 6.3.a: Modify the `POST /auth/token` endpoint (Task 4.8.c) to fetch the `app_client`'s assigned roles and their associated permissions.
+  - [x] 6.3.b: Update the M2M JWT generation utility (Task 4.2.a) to include these roles and permissions in the `app_client` JWT.
+  - [x] 6.3.c: Update integration tests for `POST /auth/token` (Task 4.8.b) to verify the presence and correctness of roles and permissions claims in the M2M JWT.
+  - [x] 6.3.d: Run and verify all tests pass using 'docker-compose exec auth_service pytest'.
 
 ## Phase 7: Security, Middleware & Final Touches
 

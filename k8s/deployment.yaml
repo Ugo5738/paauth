@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paauth
+  labels:
+    app: paauth
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: paauth
+  template:
+    metadata:
+      labels:
+        app: paauth
+    spec:
+      containers:
+      - name: paauth
+        image: DOCKER_REGISTRY/paauth:IMAGE_TAG
+        ports:
+        - containerPort: 8000
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: ROOT_PATH
+          value: "/api/v1"
+        - name: BASE_URL
+          value: "https://auth.yourdomain.com"
+        - name: LOGGING_LEVEL
+          value: "INFO"
+        envFrom:
+        - secretRef:
+            name: paauth-secrets
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5

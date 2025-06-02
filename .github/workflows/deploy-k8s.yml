@@ -1,0 +1,183 @@
+name: Build and Deploy paauth
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'auth_service/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      provider:
+        description: 'Cloud provider'
+        required: true
+        default: 'aws'
+        type: choice
+        options:
+          - aws
+          - digitalocean
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        uses: docker/build-push-action@v4
+        with:
+          context: ./auth_service
+          file: ./auth_service/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.DOCKERHUB_USERNAME }}/paauth:latest
+            ${{ env.DOCKERHUB_USERNAME }}/paauth:${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.DOCKERHUB_USERNAME }}/paauth:buildcache
+          cache-to: type=registry,ref=${{ env.DOCKERHUB_USERNAME }}/paauth:buildcache,mode=max
+
+  deploy-aws:
+    needs: build
+    if: ${{ github.event.inputs.provider == 'aws' || github.event.inputs.provider == '' }}
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name paauth-cluster --region ${{ env.AWS_REGION }}
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Deploy to Kubernetes
+        env:
+          DOCKER_REGISTRY: ${{ secrets.DOCKERHUB_USERNAME }}
+          TAG: ${{ github.sha }}
+          AUTH_DOMAIN: ${{ secrets.AUTH_DOMAIN }}
+        run: |
+          # Base64 encode secrets for Kubernetes
+          SUPABASE_URL_B64=$(echo -n "${{ secrets.SUPABASE_URL }}" | base64 -w 0)
+          SUPABASE_ANON_KEY_B64=$(echo -n "${{ secrets.SUPABASE_ANON_KEY }}" | base64 -w 0)
+          SUPABASE_SERVICE_ROLE_KEY_B64=$(echo -n "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" | base64 -w 0)
+          AUTH_SERVICE_DATABASE_URL_B64=$(echo -n "${{ secrets.AUTH_SERVICE_DATABASE_URL }}" | base64 -w 0)
+          M2M_JWT_SECRET_KEY_B64=$(echo -n "${{ secrets.M2M_JWT_SECRET_KEY }}" | base64 -w 0)
+          REDIS_URL_B64=$(echo -n "${{ secrets.REDIS_URL }}" | base64 -w 0)
+          
+          # Replace variables in k8s manifests using sed instead of envsubst
+          cat k8s/secrets.yaml | \
+            sed "s|SUPABASE_URL_BASE64|$SUPABASE_URL_B64|g" | \
+            sed "s|SUPABASE_ANON_KEY_BASE64|$SUPABASE_ANON_KEY_B64|g" | \
+            sed "s|SUPABASE_SERVICE_ROLE_KEY_BASE64|$SUPABASE_SERVICE_ROLE_KEY_B64|g" | \
+            sed "s|AUTH_SERVICE_DATABASE_URL_BASE64|$AUTH_SERVICE_DATABASE_URL_B64|g" | \
+            sed "s|M2M_JWT_SECRET_KEY_BASE64|$M2M_JWT_SECRET_KEY_B64|g" | \
+            sed "s|REDIS_URL_BASE64|$REDIS_URL_B64|g" | \
+            kubectl apply -f -
+
+          cat k8s/deployment.yaml | \
+            sed "s|DOCKER_REGISTRY|$DOCKER_REGISTRY|g" | \
+            sed "s|IMAGE_TAG|$TAG|g" | \
+            kubectl apply -f -
+            
+          kubectl apply -f k8s/service.yaml
+          
+          # Process ingress with domain name
+          cat k8s/ingress.yaml | \
+            sed "s|AUTH_DOMAIN_VALUE|$AUTH_DOMAIN|g" | \
+            kubectl apply -f -
+          
+          # Verify deployment
+          kubectl rollout status deployment/paauth
+
+  deploy-digitalocean:
+    needs: build
+    if: ${{ github.event.inputs.provider == 'digitalocean' }}
+    runs-on: ubuntu-latest
+    env:
+      DIGITALOCEAN_CLUSTER_NAME: ${{ secrets.DIGITALOCEAN_CLUSTER_NAME }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      
+      - name: Save DigitalOcean kubeconfig
+        run: doctl kubernetes cluster kubeconfig save ${{ env.DIGITALOCEAN_CLUSTER_NAME }}
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+      
+      - name: Deploy to Kubernetes
+        env:
+          DOCKER_REGISTRY: ${{ secrets.DOCKERHUB_USERNAME }}
+          TAG: ${{ github.sha }}
+          AUTH_DOMAIN: ${{ secrets.AUTH_DOMAIN }}
+        run: |
+          # Base64 encode secrets for Kubernetes
+          SUPABASE_URL_B64=$(echo -n "${{ secrets.SUPABASE_URL }}" | base64 -w 0)
+          SUPABASE_ANON_KEY_B64=$(echo -n "${{ secrets.SUPABASE_ANON_KEY }}" | base64 -w 0)
+          SUPABASE_SERVICE_ROLE_KEY_B64=$(echo -n "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" | base64 -w 0)
+          AUTH_SERVICE_DATABASE_URL_B64=$(echo -n "${{ secrets.AUTH_SERVICE_DATABASE_URL }}" | base64 -w 0)
+          M2M_JWT_SECRET_KEY_B64=$(echo -n "${{ secrets.M2M_JWT_SECRET_KEY }}" | base64 -w 0)
+          REDIS_URL_B64=$(echo -n "${{ secrets.REDIS_URL }}" | base64 -w 0)
+          
+          # Replace variables in k8s manifests using sed instead of envsubst
+          cat k8s/secrets.yaml | \
+            sed "s|SUPABASE_URL_BASE64|$SUPABASE_URL_B64|g" | \
+            sed "s|SUPABASE_ANON_KEY_BASE64|$SUPABASE_ANON_KEY_B64|g" | \
+            sed "s|SUPABASE_SERVICE_ROLE_KEY_BASE64|$SUPABASE_SERVICE_ROLE_KEY_B64|g" | \
+            sed "s|AUTH_SERVICE_DATABASE_URL_BASE64|$AUTH_SERVICE_DATABASE_URL_B64|g" | \
+            sed "s|M2M_JWT_SECRET_KEY_BASE64|$M2M_JWT_SECRET_KEY_B64|g" | \
+            sed "s|REDIS_URL_BASE64|$REDIS_URL_B64|g" | \
+            kubectl apply -f -
+
+          cat k8s/deployment.yaml | \
+            sed "s|DOCKER_REGISTRY|$DOCKER_REGISTRY|g" | \
+            sed "s|IMAGE_TAG|$TAG|g" | \
+            kubectl apply -f -
+            
+          kubectl apply -f k8s/service.yaml
+          
+          # Process ingress with domain name
+          cat k8s/ingress.yaml | \
+            sed "s|AUTH_DOMAIN_VALUE|$AUTH_DOMAIN|g" | \
+            kubectl apply -f -
+          
+          # Verify deployment
+          kubectl rollout status deployment/paauth

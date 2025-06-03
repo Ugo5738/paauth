@@ -1,0 +1,27 @@
+# k8s/migration-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: paauth-migrations # Name of the migration job
+  namespace: default # Or the namespace where your app will be deployed
+spec:
+  template:
+    spec:
+      containers:
+        - name: paauth-migrator
+          image: DOCKER_REGISTRY_PLACEHOLDER/paauth:IMAGE_TAG_PLACEHOLDER # Placeholder, will be replaced by CI/CD
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - secretRef:
+                name: paauth-secrets # Assumes AUTH_SERVICE_DATABASE_URL is in this k8s secret
+          env:
+            # You might need to set PYTHONUNBUFFERED or other basic env vars if your image requires them
+            # for non-interactive script execution, but often poetry run handles this.
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          # If your alembic.ini or env.py relies on other env vars loaded by config.py,
+          # ensure they are also available from paauth-secrets or set directly here.
+          # For Alembic, the primary one is AUTH_SERVICE_DATABASE_URL.
+      restartPolicy: Never # Important for jobs: Never retry on failure within the pod, let the job controller handle retries.
+  backoffLimit: 2 # Number of times to retry the job before marking it as failed (e.g., if DB is temporarily unavailable)
+  ttlSecondsAfterFinished: 3600 # Optional: Automatically clean up finished jobs after 1 hour (3600 seconds)

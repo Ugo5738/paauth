@@ -7,10 +7,11 @@ on:
       - master
     paths:
       - "auth_service/**"
+      - "k8s/**" # Also trigger on changes to Kubernetes manifests
   workflow_dispatch:
     inputs:
       environment:
-        description: "Environment to deploy to"
+        description: "Environment to deploy to production"
         required: true
         default: "staging"
         type: choice
@@ -29,52 +30,68 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.image_info.outputs.image_tag }}
+      image_name: ${{ steps.image_info.outputs.image_name }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to DockerHub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Define Image Info
+        id: image_info
+        run: |
+          IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/paauth"
+          IMAGE_TAG="${{ github.sha }}"
+          echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "Full image name with latest tag: ${IMAGE_NAME}:latest"
+          echo "Full image name with SHA tag: ${IMAGE_NAME}:${IMAGE_TAG}"
+
       - name: Build and push
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: ./auth_service
           file: ./auth_service/Dockerfile.prod
           push: true
           tags: |
-            ${{ env.DOCKERHUB_USERNAME }}/paauth:latest
-            ${{ env.DOCKERHUB_USERNAME }}/paauth:${{ github.sha }}
-          cache-from: type=registry,ref=${{ env.DOCKERHUB_USERNAME }}/paauth:buildcache
-          cache-to: type=registry,ref=${{ env.DOCKERHUB_USERNAME }}/paauth:buildcache,mode=max
+            ${{ steps.image_info.outputs.image_name }}:latest
+            ${{ steps.image_info.outputs.image_name }}:${{ steps.image_info.outputs.image_tag }}
+          cache-from: type=registry,ref=${{ steps.image_info.outputs.image_name }}:buildcache
+          cache-to: type=registry,ref=${{ steps.image_info.outputs.image_name }}:buildcache,mode=max
 
-  deploy-aws:
+  deploy-to-aws-eks:
+    name: Deploy to AWS EKS
     needs: build
     if: ${{ github.event.inputs.provider == 'aws' || github.event.inputs.provider == '' }}
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.environment || 'staging' }}
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name paauth-cluster --region ${{ env.AWS_REGION }}
+        run: aws eks update-kubeconfig --name paauth-cluster --region ${{ secrets.AWS_REGION }}
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v3
@@ -83,42 +100,81 @@ jobs:
 
       - name: Deploy to Kubernetes
         env:
-          DOCKER_REGISTRY: ${{ secrets.DOCKERHUB_USERNAME }}
-          TAG: ${{ github.sha }}
-          AUTH_DOMAIN: ${{ secrets.AUTH_DOMAIN }}
+          DOCKER_REGISTRY_VALUE: ${{ secrets.DOCKERHUB_USERNAME }}
+          IMAGE_TAG_VALUE: ${{ needs.build.outputs.image_tag }}
+          AUTH_DOMAIN_VALUE: ${{ secrets.AUTH_DOMAIN }}
+          SUPABASE_URL_VALUE: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY_VALUE: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY_VALUE: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AUTH_SERVICE_DATABASE_URL_VALUE: ${{ secrets.AUTH_SERVICE_DATABASE_URL }}
+          M2M_JWT_SECRET_KEY_VALUE: ${{ secrets.M2M_JWT_SECRET_KEY }}
+          REDIS_URL_VALUE: ${{ secrets.REDIS_URL }}
         run: |
-          # Base64 encode secrets for Kubernetes
-          SUPABASE_URL_B64=$(echo -n "${{ secrets.SUPABASE_URL }}" | base64 -w 0)
-          SUPABASE_ANON_KEY_B64=$(echo -n "${{ secrets.SUPABASE_ANON_KEY }}" | base64 -w 0)
-          SUPABASE_SERVICE_ROLE_KEY_B64=$(echo -n "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" | base64 -w 0)
-          AUTH_SERVICE_DATABASE_URL_B64=$(echo -n "${{ secrets.AUTH_SERVICE_DATABASE_URL }}" | base64 -w 0)
-          M2M_JWT_SECRET_KEY_B64=$(echo -n "${{ secrets.M2M_JWT_SECRET_KEY }}" | base64 -w 0)
-          REDIS_URL_B64=$(echo -n "${{ secrets.REDIS_URL }}" | base64 -w 0)
+          echo "Preparing Kubernetes manifests..."
+          mkdir -p ./processed-k8s
 
-          # Replace variables in k8s manifests using sed instead of envsubst
-          cat k8s/secrets.yaml | \
-            sed "s|SUPABASE_URL_BASE64|$SUPABASE_URL_B64|g" | \
-            sed "s|SUPABASE_ANON_KEY_BASE64|$SUPABASE_ANON_KEY_B64|g" | \
-            sed "s|SUPABASE_SERVICE_ROLE_KEY_BASE64|$SUPABASE_SERVICE_ROLE_KEY_B64|g" | \
-            sed "s|AUTH_SERVICE_DATABASE_URL_BASE64|$AUTH_SERVICE_DATABASE_URL_B64|g" | \
-            sed "s|M2M_JWT_SECRET_KEY_BASE64|$M2M_JWT_SECRET_KEY_B64|g" | \
-            sed "s|REDIS_URL_BASE64|$REDIS_URL_B64|g" | \
-            kubectl apply -f -
+          # Secrets
+          SUPABASE_URL_B64=$(echo -n "$SUPABASE_URL_VALUE" | base64 -w 0)
+          SUPABASE_ANON_KEY_B64=$(echo -n "$SUPABASE_ANON_KEY_VALUE" | base64 -w 0)
+          SUPABASE_SERVICE_ROLE_KEY_B64=$(echo -n "$SUPABASE_SERVICE_ROLE_KEY_VALUE" | base64 -w 0)
+          AUTH_SERVICE_DATABASE_URL_B64=$(echo -n "$AUTH_SERVICE_DATABASE_URL_VALUE" | base64 -w 0)
+          M2M_JWT_SECRET_KEY_B64=$(echo -n "$M2M_JWT_SECRET_KEY_VALUE" | base64 -w 0)
+          REDIS_URL_B64=$(echo -n "$REDIS_URL_VALUE" | base64 -w 0)
 
-          cat k8s/deployment.yaml | \
-            sed "s|DOCKER_REGISTRY|$DOCKER_REGISTRY|g" | \
-            sed "s|IMAGE_TAG|$TAG|g" | \
-            kubectl apply -f -
-            
-          kubectl apply -f k8s/service.yaml
+          sed_command_secrets="s|SUPABASE_URL_BASE64|$SUPABASE_URL_B64|g; "
+          sed_command_secrets+="s|SUPABASE_ANON_KEY_BASE64|$SUPABASE_ANON_KEY_B64|g; "
+          sed_command_secrets+="s|SUPABASE_SERVICE_ROLE_KEY_BASE64|$SUPABASE_SERVICE_ROLE_KEY_B64|g; "
+          sed_command_secrets+="s|AUTH_SERVICE_DATABASE_URL_BASE64|$AUTH_SERVICE_DATABASE_URL_B64|g; "
+          sed_command_secrets+="s|M2M_JWT_SECRET_KEY_BASE64|$M2M_JWT_SECRET_KEY_B64|g; "
+          sed_command_secrets+="s|REDIS_URL_BASE64|$REDIS_URL_B64|g"
+          cat k8s/secrets.yaml | sed "$sed_command_secrets" > ./processed-k8s/secrets.yaml
 
-          # Process ingress with domain name
-          cat k8s/ingress.yaml | \
-            sed "s|AUTH_DOMAIN_VALUE|$AUTH_DOMAIN|g" | \
-            kubectl apply -f -
+          # Migration Job
+          sed_command_migration_job="s|DOCKER_REGISTRY_PLACEHOLDER|$DOCKER_REGISTRY_VALUE|g; s|IMAGE_TAG_PLACEHOLDER|$IMAGE_TAG_VALUE|g"
+          cat k8s/migration-job.yaml | sed "$sed_command_migration_job" > ./processed-k8s/migration-job.yaml
 
-          # Verify deployment
-          kubectl rollout status deployment/paauth
+          # Deployment
+          sed_command_deployment="s|DOCKER_REGISTRY|$DOCKER_REGISTRY_VALUE|g; s|IMAGE_TAG|$IMAGE_TAG_VALUE|g"
+          cat k8s/deployment.yaml | sed "$sed_command_deployment" > ./processed-k8s/deployment.yaml
+
+          # Ingress
+          sed "s|AUTH_DOMAIN_VALUE|$AUTH_DOMAIN_VALUE|g" k8s/ingress.yaml > ./processed-k8s/ingress.yaml
+
+          # Service (usually no placeholders)
+          cp k8s/service.yaml ./processed-k8s/service.yaml
+          echo "Manifests prepared in ./processed-k8s directory."
+
+      - name: Apply Kubernetes Secrets
+        run: kubectl apply -f ./processed-k8s/secrets.yaml
+
+      - name: Run Database Migrations
+        run: |
+          echo "Applying migration job..."
+          # Delete existing job if it exists to allow re-running, or use --replace
+          kubectl delete job paauth-migrations --ignore-not-found=true --namespace=default # Adjust namespace if needed
+          kubectl apply -f ./processed-k8s/migration-job.yaml
+          echo "Waiting for migration job to complete..."
+          kubectl wait --for=condition=complete job/paauth-migrations --timeout=5m --namespace=default # Adjust namespace
+          # Optional: Check job logs on failure
+          status=$?
+          if [ $status -ne 0 ]; then
+            echo "Migration job failed. Fetching logs:"
+            kubectl logs job/paauth-migrations --namespace=default --tail=100
+            exit $status
+          fi
+          echo "Migration job completed."
+
+      - name: Deploy Application
+        run: |
+          echo "Applying deployment..."
+          kubectl apply -f ./processed-k8s/deployment.yaml
+          echo "Applying service..."
+          kubectl apply -f ./processed-k8s/service.yaml
+          echo "Applying ingress..."
+          kubectl apply -f ./processed-k8s/ingress.yaml
+
+      - name: Verify Deployment Rollout
+        run: kubectl rollout status deployment/paauth --namespace=default --timeout=5m # Adjust namespace
 
   deploy-digitalocean:
     needs: build
@@ -136,7 +192,7 @@ jobs:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
       - name: Save DigitalOcean kubeconfig
-        run: doctl kubernetes cluster kubeconfig save ${{ env.DIGITALOCEAN_CLUSTER_NAME }}
+        run: doctl kubernetes cluster kubeconfig save ${{ secrets.DIGITALOCEAN_CLUSTER_NAME }}
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v3

@@ -6,8 +6,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from .auth_service.models.profile import Profile
-from .auth_service.schemas.user_schemas import ProfileCreate, ProfileUpdate
+from ..models.profile import Profile
+from ..schemas.user_schemas import ProfileCreate, ProfileUpdate
 
 logger = logging.getLogger(__name__)
 

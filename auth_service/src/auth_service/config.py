@@ -112,12 +112,8 @@ class Settings(BaseSettings):
         default=Environment.DEVELOPMENT, json_schema_extra={"env": "ENVIRONMENT"}
     )
 
-    base_url: str = Field(
-        ..., json_schema_extra={"env": "BASE_URL"}
-    )  # Or Optional[str] = None if not always required
-    redis_url: Optional[str] = Field(
-        None, json_schema_extra={"env": "REDIS_URL"}
-    )  # Assuming it can be optional
+    base_url: Optional[str] = Field(None, json_schema_extra={"env": "BASE_URL"})
+    redis_url: Optional[str] = Field(None, json_schema_extra={"env": "REDIS_URL"})
     oauth_callback_route_base: Optional[str] = Field(
         None, json_schema_extra={"env": "OAUTH_CALLBACK_ROUTE_BASE"}
     )

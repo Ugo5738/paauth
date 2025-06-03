@@ -109,6 +109,7 @@ jobs:
           AUTH_SERVICE_DATABASE_URL_VALUE: ${{ secrets.AUTH_SERVICE_DATABASE_URL }}
           M2M_JWT_SECRET_KEY_VALUE: ${{ secrets.M2M_JWT_SECRET_KEY }}
           REDIS_URL_VALUE: ${{ secrets.REDIS_URL }}
+          BASE_URL_VALUE: ${{ secrets.BASE_URL }}
         run: |
           echo "Preparing Kubernetes manifests..."
           mkdir -p ./processed-k8s
@@ -120,6 +121,7 @@ jobs:
           AUTH_SERVICE_DATABASE_URL_B64=$(echo -n "$AUTH_SERVICE_DATABASE_URL_VALUE" | base64 -w 0)
           M2M_JWT_SECRET_KEY_B64=$(echo -n "$M2M_JWT_SECRET_KEY_VALUE" | base64 -w 0)
           REDIS_URL_B64=$(echo -n "$REDIS_URL_VALUE" | base64 -w 0)
+          BASE_URL_B64=$(echo -n "$BASE_URL_VALUE" | base64 -w 0)
 
           sed_command_secrets="s|SUPABASE_URL_BASE64|$SUPABASE_URL_B64|g; "
           sed_command_secrets+="s|SUPABASE_ANON_KEY_BASE64|$SUPABASE_ANON_KEY_B64|g; "
@@ -127,6 +129,7 @@ jobs:
           sed_command_secrets+="s|AUTH_SERVICE_DATABASE_URL_BASE64|$AUTH_SERVICE_DATABASE_URL_B64|g; "
           sed_command_secrets+="s|M2M_JWT_SECRET_KEY_BASE64|$M2M_JWT_SECRET_KEY_B64|g; "
           sed_command_secrets+="s|REDIS_URL_BASE64|$REDIS_URL_B64|g"
+          sed_command_secrets+="s|BASE_URL_BASE64|$BASE_URL_B64|g"
           cat k8s/secrets.yaml | sed "$sed_command_secrets" > ./processed-k8s/secrets.yaml
 
           # Migration Job
@@ -176,64 +179,65 @@ jobs:
       - name: Verify Deployment Rollout
         run: kubectl rollout status deployment/paauth --namespace=default --timeout=5m # Adjust namespace
 
-  deploy-digitalocean:
-    needs: build
-    if: ${{ github.event.inputs.provider == 'digitalocean' }}
-    runs-on: ubuntu-latest
-    env:
-      DIGITALOCEAN_CLUSTER_NAME: ${{ secrets.DIGITALOCEAN_CLUSTER_NAME }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
 
-      - name: Install doctl
-        uses: digitalocean/action-doctl@v2
-        with:
-          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+  # deploy-digitalocean:
+  #   needs: build
+  #   if: ${{ github.event.inputs.provider == 'digitalocean' }}
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     DIGITALOCEAN_CLUSTER_NAME: ${{ secrets.DIGITALOCEAN_CLUSTER_NAME }}
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v3
 
-      - name: Save DigitalOcean kubeconfig
-        run: doctl kubernetes cluster kubeconfig save ${{ secrets.DIGITALOCEAN_CLUSTER_NAME }}
+  #     - name: Install doctl
+  #       uses: digitalocean/action-doctl@v2
+  #       with:
+  #         token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v3
-        with:
-          version: "latest"
+  #     - name: Save DigitalOcean kubeconfig
+  #       run: doctl kubernetes cluster kubeconfig save ${{ secrets.DIGITALOCEAN_CLUSTER_NAME }}
 
-      - name: Deploy to Kubernetes
-        env:
-          DOCKER_REGISTRY: ${{ secrets.DOCKERHUB_USERNAME }}
-          TAG: ${{ github.sha }}
-          AUTH_DOMAIN: ${{ secrets.AUTH_DOMAIN }}
-        run: |
-          # Base64 encode secrets for Kubernetes
-          SUPABASE_URL_B64=$(echo -n "${{ secrets.SUPABASE_URL }}" | base64 -w 0)
-          SUPABASE_ANON_KEY_B64=$(echo -n "${{ secrets.SUPABASE_ANON_KEY }}" | base64 -w 0)
-          SUPABASE_SERVICE_ROLE_KEY_B64=$(echo -n "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" | base64 -w 0)
-          AUTH_SERVICE_DATABASE_URL_B64=$(echo -n "${{ secrets.AUTH_SERVICE_DATABASE_URL }}" | base64 -w 0)
-          M2M_JWT_SECRET_KEY_B64=$(echo -n "${{ secrets.M2M_JWT_SECRET_KEY }}" | base64 -w 0)
-          REDIS_URL_B64=$(echo -n "${{ secrets.REDIS_URL }}" | base64 -w 0)
+  #     - name: Install kubectl
+  #       uses: azure/setup-kubectl@v3
+  #       with:
+  #         version: "latest"
 
-          # Replace variables in k8s manifests using sed instead of envsubst
-          cat k8s/secrets.yaml | \
-            sed "s|SUPABASE_URL_BASE64|$SUPABASE_URL_B64|g" | \
-            sed "s|SUPABASE_ANON_KEY_BASE64|$SUPABASE_ANON_KEY_B64|g" | \
-            sed "s|SUPABASE_SERVICE_ROLE_KEY_BASE64|$SUPABASE_SERVICE_ROLE_KEY_B64|g" | \
-            sed "s|AUTH_SERVICE_DATABASE_URL_BASE64|$AUTH_SERVICE_DATABASE_URL_B64|g" | \
-            sed "s|M2M_JWT_SECRET_KEY_BASE64|$M2M_JWT_SECRET_KEY_B64|g" | \
-            sed "s|REDIS_URL_BASE64|$REDIS_URL_B64|g" | \
-            kubectl apply -f -
+  #     - name: Deploy to Kubernetes
+  #       env:
+  #         DOCKER_REGISTRY: ${{ secrets.DOCKERHUB_USERNAME }}
+  #         TAG: ${{ github.sha }}
+  #         AUTH_DOMAIN: ${{ secrets.AUTH_DOMAIN }}
+  #       run: |
+  #         # Base64 encode secrets for Kubernetes
+  #         SUPABASE_URL_B64=$(echo -n "${{ secrets.SUPABASE_URL }}" | base64 -w 0)
+  #         SUPABASE_ANON_KEY_B64=$(echo -n "${{ secrets.SUPABASE_ANON_KEY }}" | base64 -w 0)
+  #         SUPABASE_SERVICE_ROLE_KEY_B64=$(echo -n "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" | base64 -w 0)
+  #         AUTH_SERVICE_DATABASE_URL_B64=$(echo -n "${{ secrets.AUTH_SERVICE_DATABASE_URL }}" | base64 -w 0)
+  #         M2M_JWT_SECRET_KEY_B64=$(echo -n "${{ secrets.M2M_JWT_SECRET_KEY }}" | base64 -w 0)
+  #         REDIS_URL_B64=$(echo -n "${{ secrets.REDIS_URL }}" | base64 -w 0)
 
-          cat k8s/deployment.yaml | \
-            sed "s|DOCKER_REGISTRY|$DOCKER_REGISTRY|g" | \
-            sed "s|IMAGE_TAG|$TAG|g" | \
-            kubectl apply -f -
-            
-          kubectl apply -f k8s/service.yaml
+  #         # Replace variables in k8s manifests using sed instead of envsubst
+  #         cat k8s/secrets.yaml | \
+  #           sed "s|SUPABASE_URL_BASE64|$SUPABASE_URL_B64|g" | \
+  #           sed "s|SUPABASE_ANON_KEY_BASE64|$SUPABASE_ANON_KEY_B64|g" | \
+  #           sed "s|SUPABASE_SERVICE_ROLE_KEY_BASE64|$SUPABASE_SERVICE_ROLE_KEY_B64|g" | \
+  #           sed "s|AUTH_SERVICE_DATABASE_URL_BASE64|$AUTH_SERVICE_DATABASE_URL_B64|g" | \
+  #           sed "s|M2M_JWT_SECRET_KEY_BASE64|$M2M_JWT_SECRET_KEY_B64|g" | \
+  #           sed "s|REDIS_URL_BASE64|$REDIS_URL_B64|g" | \
+  #           kubectl apply -f -
 
-          # Process ingress with domain name
-          cat k8s/ingress.yaml | \
-            sed "s|AUTH_DOMAIN_VALUE|$AUTH_DOMAIN|g" | \
-            kubectl apply -f -
+  #         cat k8s/deployment.yaml | \
+  #           sed "s|DOCKER_REGISTRY|$DOCKER_REGISTRY|g" | \
+  #           sed "s|IMAGE_TAG|$TAG|g" | \
+  #           kubectl apply -f -
 
-          # Verify deployment
-          kubectl rollout status deployment/paauth
+  #         kubectl apply -f k8s/service.yaml
+
+  #         # Process ingress with domain name
+  #         cat k8s/ingress.yaml | \
+  #           sed "s|AUTH_DOMAIN_VALUE|$AUTH_DOMAIN|g" | \
+  #           kubectl apply -f -
+
+  #         # Verify deployment
+  #         kubectl rollout status deployment/paauth

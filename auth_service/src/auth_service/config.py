@@ -1,6 +1,6 @@
 import os
 from enum import Enum
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 
 from pydantic import ConfigDict, Field, field_validator
 from pydantic_settings import BaseSettings
@@ -110,6 +110,27 @@ class Settings(BaseSettings):
     # Environment configuration
     environment: Environment = Field(
         default=Environment.DEVELOPMENT, json_schema_extra={"env": "ENVIRONMENT"}
+    )
+
+    base_url: str = Field(
+        ..., json_schema_extra={"env": "BASE_URL"}
+    )  # Or Optional[str] = None if not always required
+    redis_url: Optional[str] = Field(
+        None, json_schema_extra={"env": "REDIS_URL"}
+    )  # Assuming it can be optional
+    oauth_callback_route_base: Optional[str] = Field(
+        None, json_schema_extra={"env": "OAUTH_CALLBACK_ROUTE_BASE"}
+    )
+    email_confirmation_redirect_url: Optional[str] = Field(
+        None, json_schema_extra={"env": "EMAIL_CONFIRMATION_REDIRECT_URL"}
+    )
+
+    # AWS Credentials (consider if these should truly be in app settings vs. handled by instance roles/env vars for deployment)
+    aws_access_key_id: Optional[str] = Field(
+        None, json_schema_extra={"env": "AWS_ACCESS_KEY_ID"}
+    )
+    aws_secret_access_key: Optional[str] = Field(
+        None, json_schema_extra={"env": "AWS_SECRET_ACCESS_KEY"}
     )
 
     @field_validator("auth_service_database_url")

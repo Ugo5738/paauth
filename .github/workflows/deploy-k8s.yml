@@ -6,21 +6,21 @@ on:
       - main
       - master
     paths:
-      - 'auth_service/**'
+      - "auth_service/**"
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Environment to deploy to'
+        description: "Environment to deploy to"
         required: true
-        default: 'staging'
+        default: "staging"
         type: choice
         options:
           - staging
           - production
       provider:
-        description: 'Cloud provider'
+        description: "Cloud provider"
         required: true
-        default: 'aws'
+        default: "aws"
         type: choice
         options:
           - aws
@@ -79,7 +79,7 @@ jobs:
       - name: Install kubectl
         uses: azure/setup-kubectl@v3
         with:
-          version: 'latest'
+          version: "latest"
 
       - name: Deploy to Kubernetes
         env:
@@ -94,7 +94,7 @@ jobs:
           AUTH_SERVICE_DATABASE_URL_B64=$(echo -n "${{ secrets.AUTH_SERVICE_DATABASE_URL }}" | base64 -w 0)
           M2M_JWT_SECRET_KEY_B64=$(echo -n "${{ secrets.M2M_JWT_SECRET_KEY }}" | base64 -w 0)
           REDIS_URL_B64=$(echo -n "${{ secrets.REDIS_URL }}" | base64 -w 0)
-          
+
           # Replace variables in k8s manifests using sed instead of envsubst
           cat k8s/secrets.yaml | \
             sed "s|SUPABASE_URL_BASE64|$SUPABASE_URL_B64|g" | \
@@ -111,12 +111,12 @@ jobs:
             kubectl apply -f -
             
           kubectl apply -f k8s/service.yaml
-          
+
           # Process ingress with domain name
           cat k8s/ingress.yaml | \
             sed "s|AUTH_DOMAIN_VALUE|$AUTH_DOMAIN|g" | \
             kubectl apply -f -
-          
+
           # Verify deployment
           kubectl rollout status deployment/paauth
 
@@ -134,15 +134,15 @@ jobs:
         uses: digitalocean/action-doctl@v2
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-      
+
       - name: Save DigitalOcean kubeconfig
         run: doctl kubernetes cluster kubeconfig save ${{ env.DIGITALOCEAN_CLUSTER_NAME }}
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v3
         with:
-          version: 'latest'
-      
+          version: "latest"
+
       - name: Deploy to Kubernetes
         env:
           DOCKER_REGISTRY: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -156,7 +156,7 @@ jobs:
           AUTH_SERVICE_DATABASE_URL_B64=$(echo -n "${{ secrets.AUTH_SERVICE_DATABASE_URL }}" | base64 -w 0)
           M2M_JWT_SECRET_KEY_B64=$(echo -n "${{ secrets.M2M_JWT_SECRET_KEY }}" | base64 -w 0)
           REDIS_URL_B64=$(echo -n "${{ secrets.REDIS_URL }}" | base64 -w 0)
-          
+
           # Replace variables in k8s manifests using sed instead of envsubst
           cat k8s/secrets.yaml | \
             sed "s|SUPABASE_URL_BASE64|$SUPABASE_URL_B64|g" | \
@@ -173,11 +173,11 @@ jobs:
             kubectl apply -f -
             
           kubectl apply -f k8s/service.yaml
-          
+
           # Process ingress with domain name
           cat k8s/ingress.yaml | \
             sed "s|AUTH_DOMAIN_VALUE|$AUTH_DOMAIN|g" | \
             kubectl apply -f -
-          
+
           # Verify deployment
           kubectl rollout status deployment/paauth

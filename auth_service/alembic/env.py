@@ -77,16 +77,22 @@ target_metadata = Base.metadata
 
 # Function to control which objects are considered by autogenerate
 def include_object(object, name, type_, reflected, compare_to):
+    # Only manage objects in the 'public' schema (or your custom app schema if you used one)
+    # None schema is often the default 'public' schema in PostgreSQL.
     if type_ == "table":
-        # For tables, include if they are in 'public' or 'auth' schema
-        # None is often the default schema (public for PostgreSQL)
-        return object.schema in [None, "public", "auth"]
+        if object.schema not in [
+            None,
+            "public",
+        ]:  # Adjust "public" if your tables are in a different custom schema
+            return False
     elif type_ == "schema":
-        # Include 'auth' and 'public' schemas explicitly
-        return name in ["auth", "public"]
-    else:
-        # Include other types of objects (e.g., sequences, indexes not tied to tables directly) by default
-        return True
+        if name not in [
+            None,
+            "public",
+        ]:  # Adjust "public" if your tables are in a different custom schema
+            return False
+    # By default, allow other types unless explicitly excluded
+    return True
 
 
 # other values from the config, defined by the needs of env.py,
@@ -146,80 +152,91 @@ def do_run_migrations(connection):
 async def verify_schema_after_migration(connection) -> None:
     """Verify database schema after migrations to ensure they were applied correctly."""
     try:
-        print("\n[VERIFY_MIGRATIONS] Running schema verification to ensure all migrations were properly applied...")
-        
+        print(
+            "\n[VERIFY_MIGRATIONS] Running schema verification to ensure all migrations were properly applied..."
+        )
+
         # Get expected schema from models
         tables = set()
         columns = {}
-        
+
         for table_name, table in target_metadata.tables.items():
             # Skip auth schema tables that might be managed by Supabase
             if table_name.startswith("auth."):
                 continue
-                
+
             # For tables with schema, use just the table name for comparison
             if "." in table_name:
                 simple_name = table_name.split(".")[-1]
             else:
                 simple_name = table_name
-                
+
             tables.add(simple_name)
             columns[simple_name] = set(column.name for column in table.columns)
-        
+
         # Get actual schema from database
         actual_tables = set()
         actual_columns = {}
-        
+
         # Get all tables in the public schema
         result = await connection.execute(
-            sa.text("""SELECT table_name FROM information_schema.tables 
-                   WHERE table_schema = 'public' AND table_type = 'BASE TABLE'""")
+            sa_text(
+                """SELECT table_name FROM information_schema.tables 
+                   WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"""
+            )
         )
-        
+
         for row in result:
             table_name = row[0]
             actual_tables.add(table_name)
-            
+
             # Get columns for this table
             col_result = await connection.execute(
-                sa.text("""SELECT column_name FROM information_schema.columns 
-                       WHERE table_schema = 'public' AND table_name = :table_name"""),
-                {"table_name": table_name}
+                sa_text(
+                    """SELECT column_name FROM information_schema.columns 
+                       WHERE table_schema = 'public' AND table_name = :table_name"""
+                ),
+                {"table_name": table_name},
             )
-            
+
             actual_columns[table_name] = set(row[0] for row in col_result)
-        
+
         # Verify tables
         missing_tables = tables - actual_tables
         if missing_tables:
-            print(f"\n[VERIFY_MIGRATIONS] ❌ Missing tables in database: {missing_tables}")
+            print(
+                f"\n[VERIFY_MIGRATIONS] ❌ Missing tables in database: {missing_tables}"
+            )
             return False
-            
+
         # Verify columns
         schema_issues = []
         for table_name, expected_cols in columns.items():
             if table_name not in actual_columns:
                 continue  # Already reported as missing table
-                
+
             actual_cols = actual_columns[table_name]
             missing_columns = expected_cols - actual_cols
-            
+
             if missing_columns:
                 schema_issues.append(
                     f"Table '{table_name}' is missing columns: {missing_columns}"
                 )
-        
+
         if schema_issues:
             for issue in schema_issues:
                 print(f"\n[VERIFY_MIGRATIONS] ❌ {issue}")
             return False
-            
-        print("\n[VERIFY_MIGRATIONS] ✅ Database schema verification passed - all expected tables and columns exist")
+
+        print(
+            "\n[VERIFY_MIGRATIONS] ✅ Database schema verification passed - all expected tables and columns exist"
+        )
         return True
-        
+
     except Exception as e:
         print(f"\n[VERIFY_MIGRATIONS] ❌ Error verifying migrations: {e}")
         return False
+
 
 async def run_migrations_online_async() -> None:
     """Run migrations in 'online' mode asynchronously."""
@@ -232,13 +249,19 @@ async def run_migrations_online_async() -> None:
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
         await connection.commit()  # Ensure changes are committed
-        
+
         # Verify schema after migration
         verification_passed = await verify_schema_after_migration(connection)
         if not verification_passed:
-            print("\n[VERIFY_MIGRATIONS] ⚠️ WARNING: Schema verification failed after migration! Some columns might be missing.")
-            print("\n[VERIFY_MIGRATIONS] This could lead to UndefinedColumn errors in your application.")
-            print("\n[VERIFY_MIGRATIONS] Consider manually checking your database schema or rolling back this migration.")
+            print(
+                "\n[VERIFY_MIGRATIONS] ⚠️ WARNING: Schema verification failed after migration! Some columns might be missing."
+            )
+            print(
+                "\n[VERIFY_MIGRATIONS] This could lead to UndefinedColumn errors in your application."
+            )
+            print(
+                "\n[VERIFY_MIGRATIONS] Consider manually checking your database schema or rolling back this migration."
+            )
             # We don't raise an exception here to allow migrations to continue in production
             # but we provide a clear warning that something might be wrong
 

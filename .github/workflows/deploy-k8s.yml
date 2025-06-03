@@ -128,7 +128,7 @@ jobs:
           sed_command_secrets+="s|SUPABASE_SERVICE_ROLE_KEY_BASE64|$SUPABASE_SERVICE_ROLE_KEY_B64|g; "
           sed_command_secrets+="s|AUTH_SERVICE_DATABASE_URL_BASE64|$AUTH_SERVICE_DATABASE_URL_B64|g; "
           sed_command_secrets+="s|M2M_JWT_SECRET_KEY_BASE64|$M2M_JWT_SECRET_KEY_B64|g; "
-          sed_command_secrets+="s|REDIS_URL_BASE64|$REDIS_URL_B64|g"
+          sed_command_secrets+="s|REDIS_URL_BASE64|$REDIS_URL_B64|g;"
           sed_command_secrets+="s|BASE_URL_BASE64|$BASE_URL_B64|g"
           cat k8s/secrets.yaml | sed "$sed_command_secrets" > ./processed-k8s/secrets.yaml
 

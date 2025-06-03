@@ -3019,4 +3019,4 @@ dev = []
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "50c25703785c934fb27d9420ac9eec4dc579ec7fc7915a50dfb7aee112cd08b8"
+content-hash = "7a6aa33596f442e14e3a0739f351a8bbba72061c0e9dce8d5315b7c5acf2be2c"

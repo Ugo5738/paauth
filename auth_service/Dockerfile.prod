@@ -30,7 +30,8 @@ COPY pyproject.toml poetry.lock ./
 
 # Install dependencies
 # --only=main ensures we only install production dependencies
-RUN poetry install --only=main --no-root
+# RUN poetry install --only=main --no-root
+RUN poetry install --only=main --no-root -vvv
 
 # Copy the rest of the application
 COPY . .

@@ -470,67 +470,77 @@ This phase details the one-time setup of the AWS EKS infrastructure required to 
     #   groups:
     #     - system:masters
     ```
-- [ ] **9.4: CI/CD Pipeline Setup**
 
-  - [ ] 9.4.a: Create GitHub Actions workflow for continuous integration:
-    - [ ] 9.4.a.1: Run linting and code quality checks
-    - [ ] 9.4.a.2: Execute test suite with coverage reporting
-    - [ ] 9.4.a.3: Build and validate Docker image
-  - [ ] 9.4.b: Create deployment workflow for continuous deployment:
-    - [ ] 9.4.b.1: Configure deployment to development environment on merged PRs
-    - [ ] 9.4.b.2: Setup manual approval for production deployments
-    - [ ] 9.4.b.3: Include database migration steps in deployment process
+## Phase 11: CI/CD Pipeline Setup & Deployment (GitHub Actions)
 
-- [ ] **9.5: Production Security Hardening**
+- [ ] **11.1: Prepare Kubernetes Manifests**
+- [ ] 11.1.a: Create/Finalize `k8s/secrets.yaml` (placeholders for actual secret values).
+- [ ] 11.1.b: Create/Finalize `k8s/deployment.yaml` (placeholders for image name/tag).
+- [ ] 11.1.c: Create/Finalize `k8s/service.yaml`.
+- [ ] 11.1.d: Create/Finalize `k8s/ingress.yaml` (placeholders for auth domain, references Nginx class and Cert-Manager issuer).
+- [ ] 11.1.e: Create `k8s/migration-job.yaml` to run Alembic migrations.
+- [ ] **11.2: Configure GitHub Secrets**
+  - [ ] 11.2.a: Set up repository or environment secrets in GitHub for `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AUTH_DOMAIN`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH_SERVICE_DATABASE_URL` (Supabase pooler URL), `M2M_JWT_SECRET_KEY`, `REDIS_URL` (internal EKS Redis service URL with password).
+- [ ] **11.3: Finalize GitHub Actions Workflow (`.github/workflows/deploy-k8s.yml`)**
+  - [ ] 11.3.a: Ensure build job pushes to Docker Hub.
+  - [ ] 11.3.b: Ensure deploy job configures AWS creds, `kubectl`.
+  - [ ] 11.3.c: Implement step to prepare/substitute variables in K8s manifests.
+  - [ ] 11.3.d: Implement step to apply `paauth-secrets` K8s Secret.
+  - [ ] 11.3.e: Implement step to run the database migration K8s Job and wait for completion.
+  - [ ] 11.3.f: Implement steps to apply deployment, service, and ingress.
+  - [ ] 11.3.g: Implement step to verify deployment rollout.
+- [ ] **11.4: Initial Deployment via GitHub Actions**
+  - [ ] 11.4.a: Commit all code, K8s manifests, and workflow files. Push to `main`/`master` or trigger `workflow_dispatch`.
+  - [ ] 11.4.b: Monitor the GitHub Actions workflow run.
+- [ ] **11.5: Post-Deployment DNS Configuration**
+  - [ ] 11.5.a: After the Ingress is created by the workflow, get the AWS ALB DNS name (`kubectl get ingress paauth-ingress -n YOUR_NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'`).
+  - [ ] 11.5.b: Update your `AUTH_DOMAIN`'s CNAME record at your DNS provider to point to this ALB DNS name.
+  - [ ] 11.5.c: Verify Cert-Manager issues a TLS certificate.
+- [ ] **11.6: Test Deployed Application**
+  - [ ] 11.6.a: Access the application via `https://AUTH_DOMAIN`.
+  - [ ] 11.6.b: Perform end-to-end tests.
+- [ ] **11.7: Security Hardening (Post Initial Setup)**
+  - [ ] 11.7.a: Review and scope down IAM permissions for `paauth-service-user` to least privilege.
+  - [ ] 11.7.b: Review and scope down Kubernetes RBAC for the CI/CD user (move away from `system:masters`).
 
-  - [ ] 9.5.a: Document production secret management strategy (environment variables, Vault, etc.)
-  - [ ] 9.5.b: Implement security headers middleware
-  - [ ] 9.5.c: Configure more restrictive CORS settings for production
-  - [ ] 9.5.d: Conduct a security review focusing on authentication endpoints
+## Phase 12: Documentation and Handover (Original Phase 9.6)
 
-- [ ] **9.6: Documentation and Handover**
+- [ ] **12.1: Create comprehensive deployment documentation** (This TODO list is a good start!)
+- [ ] **12.2: Document scaling considerations and limitations**
+- [ ] **12.3: Prepare runbook for common operations and troubleshooting**
+- [ ] **12.4: Update API documentation with production-specific notes**
+- [ ] **12.5: Final Quality Assurance**
 
-  - [ ] 9.6.a: Create comprehensive deployment documentation
-  - [ ] 9.6.b: Document scaling considerations and limitations
-  - [ ] 9.6.c: Prepare runbook for common operations and troubleshooting
-  - [ ] 9.6.d: Update API documentation with production-specific notes
+## Phase 13: Additional Security and Quality Improvements
 
-- [ ] **9.7: Final Quality Assurance**
-  - [ ] 9.7.a: Execute comprehensive test suite with high coverage targets
-  - [ ] 9.7.b: Perform code review focusing on security and reliability
-  - [ ] 9.7.c: Clean up any debug code, TODOs, or commented sections
-  - [ ] 9.7.d: Validate error handling consistency across all endpoints
+- [ ] **13.1: Email Verification Enhancement**
 
-## Phase 10: Additional Security and Quality Improvements
+  - [ ] 13.1.a: Implement email verification resend functionality at endpoint `/auth/users/verify/resend`.
+  - [ ] 13.1.b: Add tests to verify the resend functionality works correctly.
+  - [ ] 13.1.c: Document the email verification flow in the API documentation.
 
-- [ ] **10.1: Email Verification Enhancement**
+- [x] **13.2: Enhanced Audit Logging**
 
-  - [ ] 10.1.a: Implement email verification resend functionality at endpoint `/auth/users/verify/resend`.
-  - [ ] 10.1.b: Add tests to verify the resend functionality works correctly.
-  - [ ] 10.1.c: Document the email verification flow in the API documentation.
+  - [x] 13.2.a: Implement structured logging for security-critical events (login attempts, admin actions, etc.).
+  - [x] 13.2.b: Add request IDs to all requests for better traceability.
+  - [x] 13.2.c: Create a logging middleware that captures request and response metadata.
+  - [x] 13.2.d: Ensure sensitive data is not logged (passwords, tokens, etc.).
 
-- [x] **10.2: Enhanced Audit Logging**
+- [ ] **13.3: Token Revocation Mechanism**
 
-  - [x] 10.2.a: Implement structured logging for security-critical events (login attempts, admin actions, etc.).
-  - [x] 10.2.b: Add request IDs to all requests for better traceability.
-  - [x] 10.2.c: Create a logging middleware that captures request and response metadata.
-  - [x] 10.2.d: Ensure sensitive data is not logged (passwords, tokens, etc.).
+  - [ ] 13.3.a: Design and implement a token denylist/blocklist for critical revocation cases.
+  - [ ] 13.3.b: Add an endpoint for token revocation (`POST /auth/token/revoke`).
+  - [ ] 13.3.c: Implement a Redis-based storage for the token denylist (optional, can use database initially).
+  - [ ] 13.3.d: Update token validation to check against the denylist.
 
-- [ ] **10.3: Token Revocation Mechanism**
+- [ ] **13.4: Multi-Factor Authentication**
 
-  - [ ] 10.3.a: Design and implement a token denylist/blocklist for critical revocation cases.
-  - [ ] 10.3.b: Add an endpoint for token revocation (`POST /auth/token/revoke`).
-  - [ ] 10.3.c: Implement a Redis-based storage for the token denylist (optional, can use database initially).
-  - [ ] 10.3.d: Update token validation to check against the denylist.
+  - [ ] 13.4.a: Implement MFA enrollment endpoint (`POST /auth/users/mfa/enroll`).
+  - [ ] 13.4.b: Implement MFA challenge endpoint (`POST /auth/users/mfa/challenge`).
+  - [ ] 13.4.c: Update login flow to accommodate MFA verification.
+  - [ ] 13.4.d: Add tests for MFA enrollment and verification.
 
-- [ ] **10.4: Multi-Factor Authentication**
-
-  - [ ] 10.4.a: Implement MFA enrollment endpoint (`POST /auth/users/mfa/enroll`).
-  - [ ] 10.4.b: Implement MFA challenge endpoint (`POST /auth/users/mfa/challenge`).
-  - [ ] 10.4.c: Update login flow to accommodate MFA verification.
-  - [ ] 10.4.d: Add tests for MFA enrollment and verification.
-
-- [ ] **10.5: Expanded Test Coverage**
-  - [ ] 10.5.a: Add more integration tests for admin endpoints.
-  - [ ] 10.5.b: Implement load testing for performance requirements.
-  - [ ] 10.5.c: Add security-focused tests (e.g., test rate limiting, token validation edge cases).
+- [ ] **13.5: Expanded Test Coverage**
+  - [ ] 13.5.a: Add more integration tests for admin endpoints.
+  - [ ] 13.5.b: Implement load testing for performance requirements.
+  - [ ] 13.5.c: Add security-focused tests (e.g., test rate limiting, token validation edge cases).

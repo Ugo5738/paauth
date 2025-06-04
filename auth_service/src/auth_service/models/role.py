@@ -34,9 +34,10 @@ class Role(Base):
         secondary="app_client_roles",
         lazy="selectin",
         back_populates="roles",  # Matches the back_populates in AppClient.roles
+        overlaps="app_client,role",  # Fix for SQLAlchemy relationship conflict warning
     )
     app_client_association_objects = relationship(
-        "AppClientRole", back_populates="role"
+        "AppClientRole", back_populates="role", overlaps="app_clients"
     )
 
     def __repr__(self):

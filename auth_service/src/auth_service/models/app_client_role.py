@@ -25,8 +25,8 @@ class AppClientRole(Base):
     )
 
     # Relationships
-    role = relationship("Role", back_populates="app_client_association_objects")
-    app_client = relationship("AppClient")
+    role = relationship("Role", back_populates="app_client_association_objects", overlaps="app_clients")
+    app_client = relationship("AppClient", overlaps="roles")
 
     def __repr__(self):
         return f"<AppClientRole(app_client_id='{self.app_client_id}', role_id='{self.role_id}')>"

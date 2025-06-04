@@ -35,6 +35,7 @@ class AppClient(Base):
         secondary="app_client_roles",
         lazy="selectin",
         back_populates="app_clients",
+        overlaps="app_client_association_objects,role",  # Fix for SQLAlchemy relationship conflict warning
     )
 
     def __repr__(self):

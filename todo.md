@@ -354,7 +354,7 @@ Define `RoleCreate`, `RoleUpdate`, `RoleResponse`, `PermissionCreate`, `Permissi
 
 This phase details the one-time setup of the AWS EKS infrastructure required to host the application. These steps are typically performed manually or via Infrastructure as Code (IaC) tools outside the application's CI/CD for the initial environment provisioning.
 
-- [ ] **10.1: AWS Account and CLI Setup**
+- [x] **10.1: AWS Account and CLI Setup**
   - [x] 10.1.a: Ensure an active AWS account is available.
   - [x] 10.1.b: Install AWS CLI locally (`brew install awscli` or official installer).
   - [x] 10.1.c: Configure AWS CLI with an IAM user (`paauth-service-user` or similar) that has sufficient permissions to create EKS clusters and related resources.
@@ -473,25 +473,25 @@ This phase details the one-time setup of the AWS EKS infrastructure required to 
 
 ## Phase 11: CI/CD Pipeline Setup & Deployment (GitHub Actions)
 
-- [ ] **11.1: Prepare Kubernetes Manifests**
-- [ ] 11.1.a: Create/Finalize `k8s/secrets.yaml` (placeholders for actual secret values).
-- [ ] 11.1.b: Create/Finalize `k8s/deployment.yaml` (placeholders for image name/tag).
-- [ ] 11.1.c: Create/Finalize `k8s/service.yaml`.
-- [ ] 11.1.d: Create/Finalize `k8s/ingress.yaml` (placeholders for auth domain, references Nginx class and Cert-Manager issuer).
-- [ ] 11.1.e: Create `k8s/migration-job.yaml` to run Alembic migrations.
-- [ ] **11.2: Configure GitHub Secrets**
-  - [ ] 11.2.a: Set up repository or environment secrets in GitHub for `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AUTH_DOMAIN`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH_SERVICE_DATABASE_URL` (Supabase pooler URL), `M2M_JWT_SECRET_KEY`, `REDIS_URL` (internal EKS Redis service URL with password).
-- [ ] **11.3: Finalize GitHub Actions Workflow (`.github/workflows/deploy-k8s.yml`)**
-  - [ ] 11.3.a: Ensure build job pushes to Docker Hub.
-  - [ ] 11.3.b: Ensure deploy job configures AWS creds, `kubectl`.
-  - [ ] 11.3.c: Implement step to prepare/substitute variables in K8s manifests.
-  - [ ] 11.3.d: Implement step to apply `paauth-secrets` K8s Secret.
-  - [ ] 11.3.e: Implement step to run the database migration K8s Job and wait for completion.
-  - [ ] 11.3.f: Implement steps to apply deployment, service, and ingress.
-  - [ ] 11.3.g: Implement step to verify deployment rollout.
-- [ ] **11.4: Initial Deployment via GitHub Actions**
-  - [ ] 11.4.a: Commit all code, K8s manifests, and workflow files. Push to `main`/`master` or trigger `workflow_dispatch`.
-  - [ ] 11.4.b: Monitor the GitHub Actions workflow run.
+- [x] **11.1: Prepare Kubernetes Manifests**
+- [x] 11.1.a: Create/Finalize `k8s/secrets.yaml` (placeholders for actual secret values).
+- [x] 11.1.b: Create/Finalize `k8s/deployment.yaml` (placeholders for image name/tag).
+- [x] 11.1.c: Create/Finalize `k8s/service.yaml`.
+- [x] 11.1.d: Create/Finalize `k8s/ingress.yaml` (placeholders for auth domain, references Nginx class and Cert-Manager issuer).
+- [x] 11.1.e: Create `k8s/migration-job.yaml` to run Alembic migrations.
+- [x] **11.2: Configure GitHub Secrets**
+  - [x] 11.2.a: Set up repository or environment secrets in GitHub for `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AUTH_DOMAIN`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH_SERVICE_DATABASE_URL` (Supabase pooler URL), `M2M_JWT_SECRET_KEY`, `REDIS_URL` (internal EKS Redis service URL with password).
+- [x] **11.3: Finalize GitHub Actions Workflow (`.github/workflows/deploy-k8s.yml`)**
+  - [x] 11.3.a: Ensure build job pushes to Docker Hub.
+  - [x] 11.3.b: Ensure deploy job configures AWS creds, `kubectl`.
+  - [x] 11.3.c: Implement step to prepare/substitute variables in K8s manifests.
+  - [x] 11.3.d: Implement step to apply `paauth-secrets` K8s Secret.
+  - [x] 11.3.e: Implement step to run the database migration K8s Job and wait for completion.
+  - [x] 11.3.f: Implement steps to apply deployment, service, and ingress.
+  - [x] 11.3.g: Implement step to verify deployment rollout.
+- [x] **11.4: Initial Deployment via GitHub Actions**
+  - [x] 11.4.a: Commit all code, K8s manifests, and workflow files. Push to `main`/`master` or trigger `workflow_dispatch`.
+  - [x] 11.4.b: Monitor the GitHub Actions workflow run.
 - [ ] **11.5: Post-Deployment DNS Configuration**
   - [ ] 11.5.a: After the Ingress is created by the workflow, get the AWS ALB DNS name (`kubectl get ingress paauth-ingress -n YOUR_NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'`).
   - [ ] 11.5.b: Update your `AUTH_DOMAIN`'s CNAME record at your DNS provider to point to this ALB DNS name.

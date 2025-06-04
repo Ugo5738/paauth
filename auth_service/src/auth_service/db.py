@@ -31,14 +31,16 @@ Base = declarative_base()
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Async session generator for dependency injection.
-    Handles session creation, yielding, and cleanup (rollback on error, close).
+    Handles session creation, yielding, and cleanup (rollback on error).
     Commits should typically be handled within the business logic using the session.
     """
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        except Exception:
-            await session.rollback()  # Ensure rollback on error within the managed block
-            raise
-        finally:
-            await session.close()
+    session = AsyncSessionLocal()
+    try:
+        yield session
+    except Exception:
+        await session.rollback()  # Ensure rollback on error
+        raise
+    finally:
+        # The AsyncSessionLocal context manager already handles closing properly
+        # We don't need to explicitly call close() again which causes the IllegalStateChangeError
+        await session.close()

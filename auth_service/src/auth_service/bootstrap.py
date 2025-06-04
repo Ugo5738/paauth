@@ -176,9 +176,11 @@ async def create_admin_user(email: str, password: str) -> Optional[SupabaseUser]
         )
 
         existing_admin_user_data = None
-        if user_list_response and user_list_response.users:
-            for user_data in user_list_response.users:
-                if user_data.email == email:
+        # The response is a list directly, not an object with a users property
+        if user_list_response:
+            logger.debug(f"Got {len(user_list_response)} users from Supabase")
+            for user_data in user_list_response:
+                if hasattr(user_data, 'email') and user_data.email == email:
                     logger.info(
                         f"Admin user with email '{email}' already exists (ID: {user_data.id})."
                     )

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from supabase._async.client import AsyncClient as AsyncSupabaseClient
 
 from auth_service.config import settings as app_settings
+from auth_service.crud import user_crud
 from auth_service.models.permission import Permission
 from auth_service.models.role import Role
 from auth_service.models.role_permission import RolePermission

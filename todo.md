@@ -326,15 +326,17 @@ Define `RoleCreate`, `RoleUpdate`, `RoleResponse`, `PermissionCreate`, `Permissi
 ## Phase 9: Deployment Preparation & Finalization
 
 - [ ] **9.1: Production Docker Configuration**
-  - [ ] 9.1.a: Write a multi-stage Dockerfile for a lean, secure production image:
-    - [ ] 9.1.a.1: Use Python 3.12 slim as base image
-    - [ ] 9.1.a.2: Install only production dependencies using Poetry
-    - [ ] 9.1.a.3: Implement proper user permissions (non-root user)
-    - [ ] 9.1.a.4: Configure reasonable health checks and defaults
-  - [ ] 9.1.b: Create optimized docker-compose.prod.yml for production-like deployments
-  - [ ] 9.1.c: Test building and running the production Docker image locally
+
+  - [x] 9.1.a: Write a multi-stage Dockerfile for a lean, secure production image:
+    - [x] 9.1.a.1: Use Python 3.12 slim as base image
+    - [x] 9.1.a.2: Install only production dependencies using Poetry
+    - [x] 9.1.a.3: Implement proper user permissions (non-root user)
+    - [x] 9.1.a.4: Configure reasonable health checks and defaults
+  - [x] 9.1.b: Create optimized docker-compose.prod.yml for production-like deployments
+  - [x] 9.1.c: Test building and running the production Docker image locally
 
 - [x] **9.2: Implement Admin and RBAC Bootstrapping**
+
   - [x] 9.2.a: Create a bootstrap.py module that runs during application startup
   - [x] 9.2.b: Implement automatic creation of initial admin user if none exists
   - [x] 9.2.c: Create core roles (admin, user, service) and base permissions automatically
@@ -342,12 +344,134 @@ Define `RoleCreate`, `RoleUpdate`, `RoleResponse`, `PermissionCreate`, `Permissi
   - [x] 9.2.e: Write tests to verify the bootstrapping process
 
 - [x] **9.3: Production Logging and Monitoring**
+
   - [x] 9.3.a: Configure structured JSON logging for production
   - [x] 9.3.b: Implement request ID generation and tracking across components
   - [x] 9.3.c: Add health check endpoints with appropriate metrics
   - [x] 9.3.d: Document monitoring recommendations (e.g., Prometheus, Grafana)
 
+## Phase 10: Kubernetes (AWS EKS) Infrastructure Setup (Manual Steps - First Time Only)
+
+This phase details the one-time setup of the AWS EKS infrastructure required to host the application. These steps are typically performed manually or via Infrastructure as Code (IaC) tools outside the application's CI/CD for the initial environment provisioning.
+
+- [ ] **10.1: AWS Account and CLI Setup**
+  - [x] 10.1.a: Ensure an active AWS account is available.
+  - [x] 10.1.b: Install AWS CLI locally (`brew install awscli` or official installer).
+  - [x] 10.1.c: Configure AWS CLI with an IAM user (`paauth-service-user` or similar) that has sufficient permissions to create EKS clusters and related resources.
+    - Action: Run `aws configure` and provide Access Key ID, Secret Access Key, default region, and output format.
+    - Note: For initial cluster creation, this user might temporarily need broad permissions (e.g., `AdministratorAccess`). These should be scoped down post-setup.
+- [x] **10.2: Install `eksctl` and `kubectl` Locally**
+  - [x] 10.2.a: Install `eksctl` CLI (`curl ... | tar ...; sudo mv ...`).
+  - [x] 10.2.b: Install `kubectl` CLI (`brew install kubectl` or official installer).
+- [x] **10.3: Create AWS EKS Cluster (`paauth-cluster`)**
+  - [x] 10.3.a: Decide on Kubernetes version (e.g., 1.32), region, node type (e.g., `t3.medium`), and node count.
+  - [x] 10.3.b: Run `eksctl create cluster` command with appropriate flags:
+    ```bash
+    # Example:
+    eksctl create cluster --name paauth-cluster \
+                          --version 1.32 \
+                          --region YOUR_AWS_REGION \
+                          --nodegroup-name standard-workers \
+                          --node-type t3.medium \
+                          --nodes 2 \
+                          --nodes-min 1 \
+                          --nodes-max 3 \
+                          --managed \
+                          --with-oidc \
+                          --alb-ingress-access
+    ```
+  - [x] 10.3.c: Wait for cluster creation (15-25 minutes).
+  - [x] 10.3.d: Verify `kubectl` access to the new cluster (`kubectl get nodes`). `eksctl` auto-updates `~/.kube/config`.
+- [x] **10.4: Set up IAM Roles for Service Accounts (IRSA) for AWS Load Balancer Controller**
+  - [x] 10.4.a: Download the IAM policy JSON for the AWS Load Balancer Controller (ensure using a recent version URL).
+    ```bash
+    # Example for a specific version:
+    curl -o iam_policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.13.2/docs/install/iam_policy.json
+    ```
+  - [x] 10.4.b: Create the IAM policy in AWS using the downloaded JSON.
+    ```bash
+    aws iam create-policy \
+        --policy-name AWSLoadBalancerControllerIAMPolicy \
+        --policy-document file://iam_policy.json
+    ```
+    (Note the ARN of the created policy).
+  - [x] 10.4.c: Create the IAM service account for the AWS Load Balancer Controller using `eksctl`.
+    ```bash
+    eksctl create iamserviceaccount \
+      --cluster=paauth-cluster \
+      --namespace=kube-system \
+      --name=aws-load-balancer-controller \
+      --role-name "AmazonEKSLoadBalancerControllerRole" \
+      --attach-policy-arn=arn:aws:iam::YOUR_ACCOUNT_ID:policy/AWSLoadBalancerControllerIAMPolicy \
+      --approve \
+      --region YOUR_AWS_REGION
+    ```
+- [x] **10.5: Install In-Cluster Components using Helm**
+  - [x] 10.5.a: Install Helm locally (`brew install helm`).
+  - [x] 10.5.b: Install AWS Load Balancer Controller.
+    ```bash
+    helm repo add eks https://aws.github.io/eks-charts && helm repo update eks
+    helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
+      -n kube-system \
+      --set clusterName=paauth-cluster \
+      --set serviceAccount.create=false \
+      --set serviceAccount.name=aws-load-balancer-controller \
+      --set region YOUR_AWS_REGION \
+      --set vpcId YOUR_VPC_ID
+    ```
+    (Get `YOUR_VPC_ID` using `eksctl get cluster --name paauth-cluster -o json | jq -r '.[0].ResourcesVpcConfig.VpcId'`).
+  - [x] 10.5.c: Install Nginx Ingress Controller.
+    ```bash
+    helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx && helm repo update ingress-nginx
+    helm install ingress-nginx ingress-nginx/ingress-nginx \
+      --create-namespace \
+      --namespace ingress-nginx \
+      --set controller.ingressClass=nginx \
+      --set controller.ingressClassResource.name=nginx \
+      --set controller.ingressClassResource.enabled=true \
+      --set controller.ingressClassResource.default=false \
+      --set controller.admissionWebhooks.patch.nodeSelector."kubernetes\.io/os"=linux \
+      --set controller.service.type=NodePort
+    ```
+  - [x] 10.5.d: Install Cert-Manager for TLS.
+    ```bash
+    kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/vX.Y.Z/cert-manager.crds.yaml # Use latest CRD version
+    helm repo add jetstack https://charts.jetstack.io && helm repo update jetstack
+    helm install cert-manager jetstack/cert-manager \
+      --namespace cert-manager \
+      --create-namespace \
+      --version vX.Y.Z # Use latest chart version
+    ```
+  - [x] 10.5.e: Create `ClusterIssuer` for Let's Encrypt. (Create `letsencrypt-prod-issuer.yaml` and `kubectl apply -f letsencrypt-prod-issuer.yaml`).
+  - [x] 10.5.f: Install Redis using Helm (e.g., Bitnami chart).
+    ```bash
+    helm repo add bitnami https://charts.bitnami.com/bitnami && helm repo update
+    helm install paauth-redis bitnami/redis \
+      --namespace default \ # Or a dedicated namespace
+      --set auth.password="YOUR_STRONG_REDIS_PASSWORD" # Set other values as needed
+    ```
+    (Note the Redis service DNS name and password).
+- [x] **10.6: Database Setup (Alembic for Supabase Cloud)**
+  - [x] 10.6.a: Ensure Supabase Cloud project is ready.
+  - [x] 10.6.b: Clean custom application tables and `alembic_version` table from Supabase Cloud DB (if any previous attempts).
+  - [x] 10.6.c: In `auth_service/.env`, ensure `AUTH_SERVICE_DATABASE_URL` points to Supabase Cloud (preferably pooler URL).
+  - [x] 10.6.d: Delete old migration files from `auth_service/alembic/versions/`.
+  - [x] 10.6.e: In `auth_service/alembic/env.py`, refine `include_object` to exclude Supabase's `auth` schema from modification by autogenerate.
+  - [x] 10.6.f: From `auth_service/` directory, run `poetry run alembic revision -m "initial_schema_setup" --autogenerate`.
+  - [x] 10.6.g: Review the generated migration script. Ensure it ONLY creates your application tables and does NOT modify `auth` schema.
+  - [x] 10.6.h: Run `poetry run alembic upgrade head` to apply the initial schema to Supabase Cloud.
+- [x] **10.7: Configure `aws-auth` ConfigMap in EKS**
+  - [x] 10.7.a: Map the IAM user used by GitHub Actions (`paauth-service-user`) to a Kubernetes user/group with sufficient permissions (e.g., `system:masters` for initial setup, or a custom role).
+    ```bash
+    kubectl edit configmap aws-auth -n kube-system
+    # Add to mapUsers:
+    # - userarn: arn:aws:iam::YOUR_ACCOUNT_ID:user/paauth-service-user
+    #   username: github-actions-paauth
+    #   groups:
+    #     - system:masters
+    ```
 - [ ] **9.4: CI/CD Pipeline Setup**
+
   - [ ] 9.4.a: Create GitHub Actions workflow for continuous integration:
     - [ ] 9.4.a.1: Run linting and code quality checks
     - [ ] 9.4.a.2: Execute test suite with coverage reporting
@@ -358,12 +482,14 @@ Define `RoleCreate`, `RoleUpdate`, `RoleResponse`, `PermissionCreate`, `Permissi
     - [ ] 9.4.b.3: Include database migration steps in deployment process
 
 - [ ] **9.5: Production Security Hardening**
+
   - [ ] 9.5.a: Document production secret management strategy (environment variables, Vault, etc.)
   - [ ] 9.5.b: Implement security headers middleware
   - [ ] 9.5.c: Configure more restrictive CORS settings for production
   - [ ] 9.5.d: Conduct a security review focusing on authentication endpoints
 
 - [ ] **9.6: Documentation and Handover**
+
   - [ ] 9.6.a: Create comprehensive deployment documentation
   - [ ] 9.6.b: Document scaling considerations and limitations
   - [ ] 9.6.c: Prepare runbook for common operations and troubleshooting
@@ -378,23 +504,27 @@ Define `RoleCreate`, `RoleUpdate`, `RoleResponse`, `PermissionCreate`, `Permissi
 ## Phase 10: Additional Security and Quality Improvements
 
 - [ ] **10.1: Email Verification Enhancement**
+
   - [ ] 10.1.a: Implement email verification resend functionality at endpoint `/auth/users/verify/resend`.
   - [ ] 10.1.b: Add tests to verify the resend functionality works correctly.
   - [ ] 10.1.c: Document the email verification flow in the API documentation.
 
 - [x] **10.2: Enhanced Audit Logging**
+
   - [x] 10.2.a: Implement structured logging for security-critical events (login attempts, admin actions, etc.).
   - [x] 10.2.b: Add request IDs to all requests for better traceability.
   - [x] 10.2.c: Create a logging middleware that captures request and response metadata.
   - [x] 10.2.d: Ensure sensitive data is not logged (passwords, tokens, etc.).
 
 - [ ] **10.3: Token Revocation Mechanism**
+
   - [ ] 10.3.a: Design and implement a token denylist/blocklist for critical revocation cases.
   - [ ] 10.3.b: Add an endpoint for token revocation (`POST /auth/token/revoke`).
   - [ ] 10.3.c: Implement a Redis-based storage for the token denylist (optional, can use database initially).
   - [ ] 10.3.d: Update token validation to check against the denylist.
 
 - [ ] **10.4: Multi-Factor Authentication**
+
   - [ ] 10.4.a: Implement MFA enrollment endpoint (`POST /auth/users/mfa/enroll`).
   - [ ] 10.4.b: Implement MFA challenge endpoint (`POST /auth/users/mfa/challenge`).
   - [ ] 10.4.c: Update login flow to accommodate MFA verification.
@@ -404,4 +534,3 @@ Define `RoleCreate`, `RoleUpdate`, `RoleResponse`, `PermissionCreate`, `Permissi
   - [ ] 10.5.a: Add more integration tests for admin endpoints.
   - [ ] 10.5.b: Implement load testing for performance requirements.
   - [ ] 10.5.c: Add security-focused tests (e.g., test rate limiting, token validation edge cases).
-

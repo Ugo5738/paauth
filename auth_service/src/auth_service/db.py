@@ -41,6 +41,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         await session.rollback()  # Ensure rollback on error
         raise
     finally:
-        # The AsyncSessionLocal context manager already handles closing properly
-        # We don't need to explicitly call close() again which causes the IllegalStateChangeError
-        await session.close()
+        # Don't call session.close() here as it can cause IllegalStateChangeError
+        # when the session is already being closed by other parts of the framework
+        # https://sqlalche.me/e/20/isce
+        pass

@@ -285,15 +285,16 @@ async def health(
     # Supabase Admin Client (Service Role Key) Check
     admin_client_available = False
     try:
-        async with await get_supabase_admin_client() as admin_client:
-            # Try a benign admin operation, like listing users with a limit of 0 or 1.
-            # This tests if the service role key is valid and has basic admin list permission.
-            await admin_client.auth.admin.list_users(page=1, per_page=1)
-            response["components"]["supabase_admin_client"] = {
-                "status": "ok",
-                "message": "Client initialized and admin list users accessible",
-            }
-            admin_client_available = True
+        # Don't use async with since the client doesn't support async context manager protocol
+        admin_client = await get_supabase_admin_client()
+        # Try a benign admin operation, like listing users with a limit of 0 or 1.
+        # This tests if the service role key is valid and has basic admin list permission.
+        await admin_client.auth.admin.list_users(page=1, per_page=1)
+        response["components"]["supabase_admin_client"] = {
+            "status": "ok",
+            "message": "Client initialized and admin list users accessible",
+        }
+        admin_client_available = True
     except AuthApiError as e:
         logger.error(
             f"Health check - Supabase admin client AuthApiError: {str(e)} (Status: {getattr(e, 'status', 'N/A')})",

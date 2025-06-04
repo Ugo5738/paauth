@@ -88,28 +88,56 @@ Table(
 )
 
 # Test database configuration
-# Support both Docker environment and local testing
-# When running in Docker, use the Docker service name
-# When running locally, use localhost
-docker_db_url = settings.auth_service_database_url
+# This approach prioritizes:
+# 1. Explicit TEST_DATABASE_URL environment variable if provided
+# 2. Creating a dedicated test database to avoid corrupting production data
+# 3. Providing sensible defaults for different environments (local, CI, Docker)
 
-# Check if we can connect to the Docker database
-try:
-    import socket
-    socket.gethostbyname('supabase_db_paauth')
-    TEST_DATABASE_URL = docker_db_url
-    logger.info(f"Using Docker database URL: {TEST_DATABASE_URL}")
-except socket.gaierror:
-    # If Docker hostname can't be resolved, use localhost with the current user
-    # Replace both the hostname and username for local environment
-    local_db_url = docker_db_url.replace('supabase_db_paauth', 'localhost')
-    # Get the current username to use for PostgreSQL connection
-    import getpass
-    current_user = getpass.getuser()
-    local_db_url = local_db_url.replace('postgres:postgres', f'{current_user}:')
+# If a TEST_DATABASE_URL is explicitly defined in the environment, use that
+if os.environ.get('TEST_DATABASE_URL'):
+    TEST_DATABASE_URL = os.environ['TEST_DATABASE_URL']
+    logger.info(f"Using database URL from TEST_DATABASE_URL environment variable")
+
+# For CI environments, use a standard configuration
+elif os.environ.get('CI') == 'true':
+    TEST_DATABASE_URL = 'postgresql+asyncpg://postgres:postgres@localhost:5432/test_db'
+    logger.info(f"Using CI database URL: {TEST_DATABASE_URL}")
+
+# For Docker environments (when we can resolve the Docker service name)
+else:
+    base_db_url = settings.auth_service_database_url
     
-    TEST_DATABASE_URL = local_db_url
-    logger.info(f"Using local database URL: {TEST_DATABASE_URL}")
+    # Try to detect if we're in a Docker environment
+    try:
+        import socket
+        socket.gethostbyname('supabase_db_paauth')
+        # We're in Docker - use a dedicated test schema instead of the main one
+        if 'postgres' in base_db_url:
+            # Create a dedicated test database by replacing the DB name
+            TEST_DATABASE_URL = base_db_url.replace('/postgres', '/postgres_test')
+        else:
+            # If using a different DB name, just append '_test'
+            db_parts = base_db_url.split('/')
+            db_parts[-1] = db_parts[-1] + '_test'
+            TEST_DATABASE_URL = '/'.join(db_parts)
+        logger.info(f"Using Docker test database URL: {TEST_DATABASE_URL}")
+    
+    except socket.gaierror:
+        # We're in local development - use localhost with proper credentials
+        # Keep the password intact, just replace the hostname
+        TEST_DATABASE_URL = base_db_url.replace('supabase_db_paauth', 'localhost')
+        logger.info(f"Using local test database URL: {TEST_DATABASE_URL}")
+
+# Always log the database URL without credentials for security
+redacted_url = TEST_DATABASE_URL
+if '@' in redacted_url:
+    # Redact the username:password part
+    parts = redacted_url.split('@')
+    protocol_creds = parts[0].split('://')
+    redacted_url = f"{protocol_creds[0]}://****:****@{parts[1]}"
+
+logger.info(f"Using test database: {redacted_url}")
+
 
 # Determine the root directory of the project where alembic.ini is located
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

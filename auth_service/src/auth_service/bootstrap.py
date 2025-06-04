@@ -165,94 +165,95 @@ async def create_admin_user(email: str, password: str) -> Optional[SupabaseUser]
 
     try:
         # Use the admin client specifically for this operation
-        async with await get_supabase_admin_client() as admin_supabase:  # Ensures client is closed
-            logger.debug(
-                "Admin Supabase client obtained. Listing users to check existence."
-            )
+        # Don't use async with since the client doesn't support async context manager protocol
+        admin_supabase = await get_supabase_admin_client()
+        logger.debug(
+            "Admin Supabase client obtained. Listing users to check existence."
+        )
 
-            user_list_response = await admin_supabase.auth.admin.list_users(
-                per_page=1000
-            )
+        user_list_response = await admin_supabase.auth.admin.list_users(
+            per_page=1000
+        )
 
-            existing_admin_user_data = None
-            if user_list_response and user_list_response.users:
-                for user_data in user_list_response.users:
-                    if user_data.email == email:
-                        logger.info(
-                            f"Admin user with email '{email}' already exists (ID: {user_data.id})."
-                        )
-                        existing_admin_user_data = user_data
-                        break
+        existing_admin_user_data = None
+        if user_list_response and user_list_response.users:
+            for user_data in user_list_response.users:
+                if user_data.email == email:
+                    logger.info(
+                        f"Admin user with email '{email}' already exists (ID: {user_data.id})."
+                    )
+                    existing_admin_user_data = user_data
+                    break
 
-            if existing_admin_user_data:
-                # Map to your SupabaseUser Pydantic model
-                return SupabaseUser(
-                    id=existing_admin_user_data.id,
-                    aud=existing_admin_user_data.aud or "",
-                    role=existing_admin_user_data.role,  # This is Supabase 'role', not your custom app roles
-                    email=existing_admin_user_data.email,
-                    phone=existing_admin_user_data.phone,
-                    email_confirmed_at=existing_admin_user_data.email_confirmed_at,
-                    phone_confirmed_at=existing_admin_user_data.phone_confirmed_at,
-                    confirmed_at=getattr(
-                        existing_admin_user_data,
-                        "confirmed_at",
-                        existing_admin_user_data.email_confirmed_at
-                        or existing_admin_user_data.phone_confirmed_at,
-                    ),
-                    last_sign_in_at=existing_admin_user_data.last_sign_in_at,
-                    app_metadata=existing_admin_user_data.app_metadata or {},
-                    user_metadata=existing_admin_user_data.user_metadata
-                    or {},  # RBAC roles go here
-                    identities=existing_admin_user_data.identities or [],
-                    created_at=existing_admin_user_data.created_at,
-                    updated_at=existing_admin_user_data.updated_at,
-                )
-
-            # If not found, create a new admin user
-            logger.info(f"Admin user '{email}' not found. Attempting to create.")
-            signup_response = await admin_supabase.auth.admin.create_user(
-                {
-                    "email": email,
-                    "password": password,
-                    "email_confirm": True,  # Auto-confirm email for admin
-                    "user_metadata": {
-                        "roles": ["admin"]
-                    },  # Add initial RBAC role directly here
-                }
-            )
-
-            if not signup_response or not signup_response.user:
-                logger.error(
-                    "Failed to create admin user - no user object returned from Supabase."
-                )
-                return None
-
-            logger.info(
-                f"Successfully created new admin user: {signup_response.user.email} (ID: {signup_response.user.id})"
-            )
-            # Map to Pydantic model
+        if existing_admin_user_data:
+            # Map to your SupabaseUser Pydantic model
             return SupabaseUser(
-                id=signup_response.user.id,
-                aud=signup_response.user.aud or "",
-                role=signup_response.user.role,
-                email=signup_response.user.email,
-                phone=signup_response.user.phone,
-                email_confirmed_at=signup_response.user.email_confirmed_at,
-                phone_confirmed_at=signup_response.user.phone_confirmed_at,
+                id=existing_admin_user_data.id,
+                aud=existing_admin_user_data.aud or "",
+                role=existing_admin_user_data.role,  # This is Supabase 'role', not your custom app roles
+                email=existing_admin_user_data.email,
+                phone=existing_admin_user_data.phone,
+                email_confirmed_at=existing_admin_user_data.email_confirmed_at,
+                phone_confirmed_at=existing_admin_user_data.phone_confirmed_at,
                 confirmed_at=getattr(
-                    signup_response.user,
+                    existing_admin_user_data,
                     "confirmed_at",
-                    signup_response.user.email_confirmed_at
-                    or signup_response.user.phone_confirmed_at,
+                    existing_admin_user_data.email_confirmed_at
+                    or existing_admin_user_data.phone_confirmed_at,
                 ),
-                last_sign_in_at=signup_response.user.last_sign_in_at,
-                app_metadata=signup_response.user.app_metadata or {},
-                user_metadata=signup_response.user.user_metadata or {},
-                identities=signup_response.user.identities or [],
-                created_at=signup_response.user.created_at,
-                updated_at=signup_response.user.updated_at,
+                last_sign_in_at=existing_admin_user_data.last_sign_in_at,
+                app_metadata=existing_admin_user_data.app_metadata or {},
+                user_metadata=existing_admin_user_data.user_metadata
+                or {},  # RBAC roles go here
+                identities=existing_admin_user_data.identities or [],
+                created_at=existing_admin_user_data.created_at,
+                updated_at=existing_admin_user_data.updated_at,
             )
+
+        # If not found, create a new admin user
+        logger.info(f"Admin user '{email}' not found. Attempting to create.")
+        signup_response = await admin_supabase.auth.admin.create_user(
+            {
+                "email": email,
+                "password": password,
+                "email_confirm": True,  # Auto-confirm email for admin
+                "user_metadata": {
+                    "roles": ["admin"]
+                },  # Add initial RBAC role directly here
+            }
+        )
+
+        if not signup_response or not signup_response.user:
+            logger.error(
+                "Failed to create admin user - no user object returned from Supabase."
+            )
+            return None
+
+        logger.info(
+            f"Successfully created new admin user: {signup_response.user.email} (ID: {signup_response.user.id})"
+        )
+        # Map to Pydantic model
+        return SupabaseUser(
+            id=signup_response.user.id,
+            aud=signup_response.user.aud or "",
+            role=signup_response.user.role,
+            email=signup_response.user.email,
+            phone=signup_response.user.phone,
+            email_confirmed_at=signup_response.user.email_confirmed_at,
+            phone_confirmed_at=signup_response.user.phone_confirmed_at,
+            confirmed_at=getattr(
+                signup_response.user,
+                "confirmed_at",
+                signup_response.user.email_confirmed_at
+                or signup_response.user.phone_confirmed_at,
+            ),
+            last_sign_in_at=signup_response.user.last_sign_in_at,
+            app_metadata=signup_response.user.app_metadata or {},
+            user_metadata=signup_response.user.user_metadata or {},
+            identities=signup_response.user.identities or [],
+            created_at=signup_response.user.created_at,
+            updated_at=signup_response.user.updated_at,
+        )
 
     except AuthApiError as e:
         logger.error(
@@ -403,9 +404,11 @@ async def bootstrap_admin_and_rbac(db: AsyncSession) -> bool:
 
 
 # Entry point for CLI command
-async def run_bootstrap(db: AsyncSession, supabase: AsyncSupabaseClient):
+async def run_bootstrap(db: AsyncSession, supabase: AsyncSupabaseClient = None):
     """Run the bootstrapping process. Can be called from CLI or during startup."""
-    success = await bootstrap_admin_and_rbac(db, supabase)
+    # This function ignores the supabase parameter since we're not using it directly
+    # And bootstrap_admin_and_rbac doesn't need it anymore as it creates its own client
+    success = await bootstrap_admin_and_rbac(db)
     if success:
         logger.info("Bootstrap process completed successfully")
     else:

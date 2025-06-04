@@ -54,9 +54,10 @@ async def close_supabase_client():
     global _global_async_supabase_client
     if _global_async_supabase_client:
         logger.info("Closing Supabase AsyncClient...")
-        await _global_async_supabase_client.aclose()  # Use aclose() for the underlying httpx client
+        # The Supabase AsyncClient doesn't have an aclose() method
+        # Just set it to None as cleanup
         _global_async_supabase_client = None
-        logger.info("Supabase AsyncClient closed.")
+        logger.info("Supabase AsyncClient reference cleared.")
 
 
 def get_supabase_client() -> AsyncSupabaseClient:

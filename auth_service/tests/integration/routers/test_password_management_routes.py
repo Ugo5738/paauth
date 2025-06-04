@@ -29,6 +29,10 @@ async def test_password_reset_request_successful(
     test_email = f"reset_success_{uuid4().hex[:6]}@example.com"
     request_data = {"email": test_email}
 
+    # Mock settings with expected redirect URL
+    mock_settings = MagicMock()
+    mock_settings.PASSWORD_RESET_REDIRECT_URL = "http://localhost:3000/auth/update-password"
+    
     mock_supabase_auth = AsyncMock()
     mock_supabase_auth.reset_password_for_email = AsyncMock(
         return_value=None
@@ -39,9 +43,18 @@ async def test_password_reset_request_successful(
 
     async def mock_get_supabase_override():
         return mock_supabase_client_instance
+        
+    async def mock_get_app_settings_override():
+        return mock_settings
 
+    from auth_service.dependencies import get_app_settings
+    
     original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
+    original_get_settings = app.dependency_overrides.get(get_app_settings)
+    
     app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
+    app.dependency_overrides[get_app_settings] = mock_get_app_settings_override
+    
     try:
         response = await async_client.post(
             "/auth/users/password/reset", json=request_data
@@ -55,7 +68,7 @@ async def test_password_reset_request_successful(
         )
         mock_supabase_auth.reset_password_for_email.assert_called_once_with(
             email=test_email,
-            options={"redirect_to": "http://localhost:3000/auth/update-password"},
+            options={"redirect_to": mock_settings.PASSWORD_RESET_REDIRECT_URL},
         )
 
     finally:
@@ -64,6 +77,12 @@ async def test_password_reset_request_successful(
         else:
             if real_get_supabase_client in app.dependency_overrides:
                 del app.dependency_overrides[real_get_supabase_client]
+                
+        if original_get_settings:
+            app.dependency_overrides[get_app_settings] = original_get_settings
+        else:
+            if get_app_settings in app.dependency_overrides:
+                del app.dependency_overrides[get_app_settings]
 
 
 @pytest.mark.asyncio
@@ -73,6 +92,10 @@ async def test_password_reset_request_email_not_found(
     test_email = f"reset_notfound_{uuid4().hex[:6]}@example.com"
     request_data = {"email": test_email}
 
+    # Mock settings with expected redirect URL
+    mock_settings = MagicMock()
+    mock_settings.PASSWORD_RESET_REDIRECT_URL = "http://localhost:3000/auth/update-password"
+    
     mock_supabase_auth = AsyncMock()
     mock_supabase_auth.reset_password_for_email = AsyncMock(return_value=None)
 
@@ -81,9 +104,18 @@ async def test_password_reset_request_email_not_found(
 
     async def mock_get_supabase_override():
         return mock_supabase_client_instance
+        
+    async def mock_get_app_settings_override():
+        return mock_settings
 
+    from auth_service.dependencies import get_app_settings
+    
     original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
+    original_get_settings = app.dependency_overrides.get(get_app_settings)
+    
     app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
+    app.dependency_overrides[get_app_settings] = mock_get_app_settings_override
+    
     try:
         response = await async_client.post(
             "/auth/users/password/reset", json=request_data
@@ -97,7 +129,7 @@ async def test_password_reset_request_email_not_found(
         )
         mock_supabase_auth.reset_password_for_email.assert_called_once_with(
             email=test_email,
-            options={"redirect_to": "http://localhost:3000/auth/update-password"},
+            options={"redirect_to": mock_settings.PASSWORD_RESET_REDIRECT_URL},
         )
 
     finally:
@@ -106,6 +138,12 @@ async def test_password_reset_request_email_not_found(
         else:
             if real_get_supabase_client in app.dependency_overrides:
                 del app.dependency_overrides[real_get_supabase_client]
+                
+        if original_get_settings:
+            app.dependency_overrides[get_app_settings] = original_get_settings
+        else:
+            if get_app_settings in app.dependency_overrides:
+                del app.dependency_overrides[get_app_settings]
 
 
 @pytest.mark.asyncio

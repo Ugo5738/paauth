@@ -129,6 +129,13 @@ class Settings(BaseSettings):
         None, json_schema_extra={"env": "AWS_SECRET_ACCESS_KEY"}
     )
 
+    rate_limit_requests_per_minute: Optional[str] = Field(
+        None, json_schema_extra={"env": "RATE_LIMIT_REQUESTS_PER_MINUTE"}
+    )
+    rate_limit_window_seconds: Optional[str] = Field(
+        None, json_schema_extra={"env": "RATE_LIMIT_WINDOW_SECONDS"}
+    )
+
     @field_validator("auth_service_database_url")
     def validate_database_url(cls, v: str, info: Any) -> str:
         # If we're using self-hosted Supabase, ensure the database URL is configured correctly

@@ -23,7 +23,8 @@ from auth_service.schemas.user_schemas import (
     SupabaseSession,
     UserLoginRequest,
 )
-from auth_service.supabase_client import get_supabase_client as real_get_supabase_client
+# Import the real supabase client function
+from auth_service.supabase_client import get_supabase_client
 
 
 # test_login_user_successful
@@ -57,8 +58,8 @@ async def test_login_user_successful(
     async def mock_get_supabase_override():
         return mock_supabase_client_instance
 
-    original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
-    app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
+    original_get_supabase = app.dependency_overrides.get(get_supabase_client)
+    app.dependency_overrides[get_supabase_client] = mock_get_supabase_override
 
     try:
         response = await async_client.post("/auth/users/login", json=test_login_data)
@@ -76,10 +77,10 @@ async def test_login_user_successful(
 
     finally:
         if original_get_supabase:
-            app.dependency_overrides[real_get_supabase_client] = original_get_supabase
+            app.dependency_overrides[get_supabase_client] = original_get_supabase
         else:
-            if real_get_supabase_client in app.dependency_overrides:
-                del app.dependency_overrides[real_get_supabase_client]
+            if get_supabase_client in app.dependency_overrides:
+                del app.dependency_overrides[get_supabase_client]
 
 
 # test_login_user_invalid_credentials
@@ -103,8 +104,8 @@ async def test_login_user_invalid_credentials(async_client: AsyncClient, monkeyp
     async def mock_get_supabase_override():
         return mock_supabase_client_instance
 
-    original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
-    app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
+    original_get_supabase = app.dependency_overrides.get(get_supabase_client)
+    app.dependency_overrides[get_supabase_client] = mock_get_supabase_override
 
     try:
         response = await async_client.post("/auth/users/login", json=test_login_data)
@@ -117,10 +118,10 @@ async def test_login_user_invalid_credentials(async_client: AsyncClient, monkeyp
 
     finally:
         if original_get_supabase:
-            app.dependency_overrides[real_get_supabase_client] = original_get_supabase
+            app.dependency_overrides[get_supabase_client] = original_get_supabase
         else:
-            if real_get_supabase_client in app.dependency_overrides:
-                del app.dependency_overrides[real_get_supabase_client]
+            if get_supabase_client in app.dependency_overrides:
+                del app.dependency_overrides[get_supabase_client]
 
 
 # test_login_user_not_found
@@ -144,8 +145,8 @@ async def test_login_user_not_found(async_client: AsyncClient, monkeypatch):
     async def mock_get_supabase_override():
         return mock_supabase_client_instance
 
-    original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
-    app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
+    original_get_supabase = app.dependency_overrides.get(get_supabase_client)
+    app.dependency_overrides[get_supabase_client] = mock_get_supabase_override
 
     try:
         response = await async_client.post("/auth/users/login", json=test_login_data)
@@ -158,10 +159,10 @@ async def test_login_user_not_found(async_client: AsyncClient, monkeypatch):
 
     finally:
         if original_get_supabase:
-            app.dependency_overrides[real_get_supabase_client] = original_get_supabase
+            app.dependency_overrides[get_supabase_client] = original_get_supabase
         else:
-            if real_get_supabase_client in app.dependency_overrides:
-                del app.dependency_overrides[real_get_supabase_client]
+            if get_supabase_client in app.dependency_overrides:
+                del app.dependency_overrides[get_supabase_client]
 
 
 # test_login_user_email_not_confirmed
@@ -192,8 +193,8 @@ async def test_login_user_email_not_confirmed(async_client: AsyncClient, monkeyp
     async def mock_get_supabase_override():
         return mock_supabase_client_instance
 
-    original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
-    app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
+    original_get_supabase = app.dependency_overrides.get(get_supabase_client)
+    app.dependency_overrides[get_supabase_client] = mock_get_supabase_override
 
     try:
         monkeypatch.setattr(
@@ -212,10 +213,10 @@ async def test_login_user_email_not_confirmed(async_client: AsyncClient, monkeyp
 
     finally:
         if original_get_supabase:
-            app.dependency_overrides[real_get_supabase_client] = original_get_supabase
+            app.dependency_overrides[get_supabase_client] = original_get_supabase
         else:
-            if real_get_supabase_client in app.dependency_overrides:
-                del app.dependency_overrides[real_get_supabase_client]
+            if get_supabase_client in app.dependency_overrides:
+                del app.dependency_overrides[get_supabase_client]
 
 
 # test_login_magic_link_successful_request
@@ -236,8 +237,8 @@ async def test_login_magic_link_successful_request(
     async def mock_get_supabase_override():
         return mock_supabase_client_instance
 
-    original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
-    app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
+    original_get_supabase = app.dependency_overrides.get(get_supabase_client)
+    app.dependency_overrides[get_supabase_client] = mock_get_supabase_override
 
     try:
         response = await async_client.post(
@@ -256,10 +257,10 @@ async def test_login_magic_link_successful_request(
 
     finally:
         if original_get_supabase:
-            app.dependency_overrides[real_get_supabase_client] = original_get_supabase
+            app.dependency_overrides[get_supabase_client] = original_get_supabase
         else:
-            if real_get_supabase_client in app.dependency_overrides:
-                del app.dependency_overrides[real_get_supabase_client]
+            if get_supabase_client in app.dependency_overrides:
+                del app.dependency_overrides[get_supabase_client]
 
 
 # test_login_magic_link_invalid_email_format
@@ -305,8 +306,8 @@ async def test_login_magic_link_supabase_api_error(
     async def mock_get_supabase_override():
         return mock_supabase_client_instance
 
-    original_get_supabase = app.dependency_overrides.get(real_get_supabase_client)
-    app.dependency_overrides[real_get_supabase_client] = mock_get_supabase_override
+    original_get_supabase = app.dependency_overrides.get(get_supabase_client)
+    app.dependency_overrides[get_supabase_client] = mock_get_supabase_override
 
     try:
         response = await async_client.post(
@@ -324,7 +325,7 @@ async def test_login_magic_link_supabase_api_error(
 
     finally:
         if original_get_supabase:
-            app.dependency_overrides[real_get_supabase_client] = original_get_supabase
+            app.dependency_overrides[get_supabase_client] = original_get_supabase
         else:
-            if real_get_supabase_client in app.dependency_overrides:
-                del app.dependency_overrides[real_get_supabase_client]
+            if get_supabase_client in app.dependency_overrides:
+                del app.dependency_overrides[get_supabase_client]

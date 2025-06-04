@@ -85,59 +85,110 @@ async def test_assign_permissions_to_roles(db_session_for_crud):
 
 @pytest.mark.asyncio
 async def test_create_admin_user():
-    # Mock Supabase client
-    mock_supabase = AsyncMock()
-    mock_user = MagicMock()
-    mock_user.id = str(uuid.uuid4())
-    mock_user.email = "admin@example.com"
-    mock_user.aud = "authenticated"
-    mock_user.role = "authenticated"
-    mock_user.phone = None  # Fix: Set phone to None instead of letting it be a MagicMock
-    mock_user.email_confirmed_at = "2023-01-01T00:00:00Z"  # Add this required field
-    mock_user.phone_confirmed_at = None  # Add this required field
-    mock_user.last_sign_in_at = None  # Add this required field
-    mock_user.app_metadata = {}
-    mock_user.user_metadata = {}
-    mock_user.identities = []
-    mock_user.created_at = "2023-01-01T00:00:00Z"
-    mock_user.updated_at = "2023-01-01T00:00:00Z"
+    # Import the actual function and schema
+    from auth_service.schemas.user_schemas import SupabaseUser
+    from gotrue.errors import AuthApiError
     
-    # Mock admin.create_user response
-    mock_response = MagicMock()
+    # Create a concrete user UUID and test data
+    user_id = uuid.uuid4()
+    test_email = "admin@example.com"
+    test_password = "password123"
+    
+    # Create an async context manager mock for the Supabase client
+    class MockSupabaseContextManager:
+        async def __aenter__(self):
+            return self.client
+            
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
+            
+        def __init__(self, mock_client):
+            self.client = mock_client
+    
+    # Create our mock Supabase client with the necessary structure
+    mock_supabase = AsyncMock()
+    
+    # Create user data that matches real response structure
+    user_data = {
+        "id": user_id,
+        "email": test_email,
+        "aud": "authenticated",
+        "role": "authenticated",
+        "phone": None,
+        "email_confirmed_at": "2023-01-01T00:00:00Z",
+        "phone_confirmed_at": None,
+        "last_sign_in_at": None,
+        "app_metadata": {},
+        "user_metadata": {"roles": ["admin"]},
+        "identities": [],
+        "created_at": "2023-01-01T00:00:00Z",
+        "updated_at": "2023-01-01T00:00:00Z"
+    }
+    
+    # Setup the mock user object with the appropriate structure
+    mock_user = type('User', (), user_data)
+    
+    # Setup the response structure
+    mock_response = AsyncMock()
     mock_response.user = mock_user
+    
+    # Setup the auth admin client methods
     mock_supabase.auth.admin.create_user.return_value = mock_response
     
-    # Mock admin.list_users response to simulate no existing users
-    mock_list_response = MagicMock()
+    # Mock list_users to simulate no existing users
+    mock_list_response = AsyncMock()
     mock_list_response.users = []
     mock_supabase.auth.admin.list_users.return_value = mock_list_response
     
-    # Test creating admin user
-    admin_user = await create_admin_user(
-        mock_supabase, "admin@example.com", "password123"
-    )
+    # Setup our context manager that will be returned by get_supabase_admin_client
+    mock_context = MockSupabaseContextManager(mock_supabase)
     
-    # Verify admin user was created
-    assert admin_user is not None
-    assert admin_user.email == "admin@example.com"
-    assert str(admin_user.id) == mock_user.id  # Compare string representations
-    
-    # Verify Supabase client was called correctly
-    mock_supabase.auth.admin.create_user.assert_called_once()
-    create_user_args = mock_supabase.auth.admin.create_user.call_args[0][0]
-    assert create_user_args["email"] == "admin@example.com"
-    assert create_user_args["password"] == "password123"
-    assert create_user_args["email_confirm"] is True
+    # Patch get_supabase_admin_client to return our context manager
+    with patch('auth_service.bootstrap.get_supabase_admin_client', return_value=mock_context):
+        # Call the actual function with test values
+        admin_user = await create_admin_user(test_email, test_password)
+        
+        # Verify admin user was created and returned correctly
+        assert admin_user is not None, "Admin user should not be None"
+        assert admin_user.email == test_email, "Admin email does not match"
+        assert admin_user.id == user_id, "Admin ID does not match"
+        
+        # Verify Supabase client was called with correct parameters
+        mock_supabase.auth.admin.create_user.assert_called_once()
+        create_user_args = mock_supabase.auth.admin.create_user.call_args[0][0]
+        assert create_user_args["email"] == test_email
+        assert create_user_args["password"] == test_password
+        assert create_user_args["email_confirm"] is True
 
 
 @pytest.mark.asyncio
 async def test_bootstrap_admin_and_rbac():
     # Mock dependencies
     mock_db = AsyncMock()
-    mock_supabase = AsyncMock()
     
     test_admin_email = "admin@example.com"
     test_admin_password = "password123"
+    user_id = str(uuid.uuid4())
+    admin_role_id = uuid.uuid4()
+    
+    # Create a properly structured user object that will pass validation
+    user_data = {
+        "id": user_id,
+        "email": test_admin_email,
+        "aud": "authenticated",
+        "role": "authenticated",
+        "phone": None,
+        "email_confirmed_at": "2023-01-01T00:00:00Z",
+        "phone_confirmed_at": None,
+        "last_sign_in_at": None,
+        "app_metadata": {},
+        "user_metadata": {},
+        "identities": [],
+        "created_at": "2023-01-01T00:00:00Z",
+        "updated_at": "2023-01-01T00:00:00Z"
+    }
+    # Create an object with attributes from the dictionary
+    mock_user = type('User', (), user_data)
     
     # Mock successful execution of all sub-functions
     with patch('auth_service.bootstrap.create_core_roles') as mock_create_roles, \
@@ -146,36 +197,31 @@ async def test_bootstrap_admin_and_rbac():
          patch('auth_service.bootstrap.create_admin_user') as mock_create_admin, \
          patch('auth_service.bootstrap.create_admin_profile') as mock_create_profile, \
          patch('auth_service.bootstrap.assign_admin_role_to_user') as mock_assign_role, \
-         patch('auth_service.bootstrap.settings.initial_admin_email', test_admin_email), \
-         patch('auth_service.bootstrap.settings.initial_admin_password', test_admin_password):
+         patch('auth_service.bootstrap.get_supabase_admin_client'), \
+         patch('auth_service.bootstrap.app_settings.initial_admin_email', test_admin_email), \
+         patch('auth_service.bootstrap.app_settings.initial_admin_password', test_admin_password):
         
         # Configure mocks
-        mock_create_roles.return_value = {"admin": uuid.uuid4(), "user": uuid.uuid4()}
+        mock_create_roles.return_value = {"admin": admin_role_id, "user": uuid.uuid4()}
         mock_create_perms.return_value = {"users:read": uuid.uuid4()}
         mock_assign.return_value = None
         
-        mock_user = MagicMock()
-        mock_user.id = str(uuid.uuid4())
-        mock_user.email = "admin@example.com"
+        # Return our properly structured mock user
         mock_create_admin.return_value = mock_user
         
         mock_create_profile.return_value = True
-        mock_assign_role.return_value = True
-        
-        # Settings are now directly patched via the mock decorators
+        mock_assign_role.return_value = None
         
         # Test bootstrap process
-        success = await bootstrap_admin_and_rbac(mock_db, mock_supabase)
+        success = await bootstrap_admin_and_rbac(mock_db)
         
         # Verify bootstrap was successful
         assert success is True
         
         # Verify all functions were called
-        mock_create_roles.assert_called_once()
-        mock_create_perms.assert_called_once()
+        mock_create_roles.assert_called_once_with(mock_db)
+        mock_create_perms.assert_called_once_with(mock_db)
         mock_assign.assert_called_once()
-        mock_create_admin.assert_called_once_with(
-            mock_supabase, "admin@example.com", "password123"
-        )
-        mock_create_profile.assert_called_once()
-        mock_assign_role.assert_called_once()
+        mock_create_admin.assert_called_once_with(test_admin_email, test_admin_password)
+        mock_create_profile.assert_called_once_with(mock_db, mock_user)
+        mock_assign_role.assert_called_once_with(mock_db, user_id, admin_role_id)

@@ -2,7 +2,7 @@ import json
 import logging
 import sys
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, Request, Response
@@ -59,7 +59,7 @@ class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         # Base log record attributes
         log_record = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -134,7 +134,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         if request.url.path == "/health":
             return await call_next(request)
 
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         # Log request
         request_id = RequestContext.get_request_id() or "unknown"
@@ -155,7 +155,9 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
 
             # Calculate request duration
-            duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
+            duration_ms = (
+                datetime.now(timezone.utc) - start_time
+            ).total_seconds() * 1000
 
             # Log response (excluding sensitive endpoints)
             sensitive_paths = ["/auth/token", "/auth/users/login"]

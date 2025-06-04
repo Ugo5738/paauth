@@ -1,11 +1,13 @@
 import uuid
-from sqlalchemy import Column, String, Boolean, DateTime, func, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, func
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import relationship
 
 from auth_service.db import Base
 from auth_service.models.app_client_role import AppClientRole
 from auth_service.models.role import Role
+
 
 class AppClient(Base):
     __tablename__ = "app_clients"
@@ -16,16 +18,23 @@ class AppClient(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     description = Column(String, nullable=True)
     allowed_callback_urls = Column(ARRAY(String), nullable=True)
-    
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
 
     # Define many-to-many relationship with Role via AppClientRole
     roles = relationship(
         "Role",
         secondary="app_client_roles",
         lazy="selectin",
-        backref="app_clients"
+        back_populates="app_clients",
     )
 
     def __repr__(self):

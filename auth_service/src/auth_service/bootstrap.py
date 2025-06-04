@@ -328,9 +328,16 @@ async def create_admin_profile(db: AsyncSession, admin_supa_user: SupabaseUser) 
         created_profile = await user_crud.create_profile_in_db(db, profile_data)
         if created_profile:
             logger.info(f"Local profile created for admin {admin_supa_user.id}")
-            return ProfileCreate.model_validate(
-                created_profile
-            )  # Convert ORM to Pydantic
+            # Convert ORM to dictionary, then to Pydantic
+            profile_dict = {
+                "user_id": str(created_profile.user_id),
+                "email": created_profile.email,
+                "username": created_profile.username,
+                "first_name": created_profile.first_name,
+                "last_name": created_profile.last_name,
+                "is_active": created_profile.is_active
+            }
+            return ProfileCreate.model_validate(profile_dict)
         else:
             logger.error(
                 f"Failed to create local profile for admin {admin_supa_user.id}"
@@ -340,7 +347,16 @@ async def create_admin_profile(db: AsyncSession, admin_supa_user: SupabaseUser) 
         logger.info(
             f"Local profile for admin user {admin_supa_user.id} already exists."
         )
-        return ProfileCreate.model_validate(existing_profile)  # Convert ORM to Pydantic
+        # Convert ORM to dictionary, then to Pydantic
+        profile_dict = {
+            "user_id": str(existing_profile.user_id),
+            "email": existing_profile.email,
+            "username": existing_profile.username,
+            "first_name": existing_profile.first_name,
+            "last_name": existing_profile.last_name,
+            "is_active": existing_profile.is_active
+        }
+        return ProfileCreate.model_validate(profile_dict)
 
 
 async def bootstrap_admin_and_rbac(db: AsyncSession) -> bool:

@@ -152,20 +152,35 @@ jobs:
 
       - name: Run Database Migrations
         run: |
-          echo "Applying migration job..."
-          # Delete existing job if it exists to allow re-running, or use --replace
-          kubectl delete job paauth-migrations --ignore-not-found=true --namespace=default # Adjust namespace if needed
-          kubectl apply -f ./processed-k8s/migration-job.yaml
-          echo "Waiting for migration job to complete..."
-          kubectl wait --for=condition=complete job/paauth-migrations --timeout=15m --namespace=default # Adjust namespace
-          # Optional: Check job logs on failure
+          echo "Using alternative migration approach..."
+          # First deploy the main application without waiting for readiness
+          kubectl apply -f ./processed-k8s/deployment.yaml
+          
+          # Wait for the pod to be created
+          echo "Waiting for application pod to be created..."
+          sleep 10
+          
+          # Get the pod name
+          POD_NAME=$(kubectl get pods -l app=paauth -o jsonpath="{.items[0].metadata.name}")
+          echo "Found pod: $POD_NAME"
+          
+          if [ -z "$POD_NAME" ]; then
+            echo "Error: Could not find application pod"
+            kubectl get pods
+            exit 1
+          fi
+          
+          # Run migrations directly in the application pod
+          echo "Running migrations directly in application pod..."
+          kubectl exec $POD_NAME -- bash -c "cd /app && PYTHONPATH=/app alembic upgrade head --verbose"
+          
+          # Check the status
           status=$?
           if [ $status -ne 0 ]; then
-            echo "Migration job failed. Fetching logs:"
-            kubectl logs job/paauth-migrations --namespace=default --tail=100
+            echo "Migration failed when executed directly in pod"
             exit $status
           fi
-          echo "Migration job completed."
+          echo "Migration completed successfully."
 
       - name: Deploy Application
         run: |

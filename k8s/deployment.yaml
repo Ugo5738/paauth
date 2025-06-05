@@ -41,7 +41,7 @@ spec:
           # Use a startup probe to give the application time to fully initialize
           startupProbe:
             httpGet:
-              path: /
+              path: /health
               port: 8000
             failureThreshold: 30
             periodSeconds: 10

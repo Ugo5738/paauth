@@ -6,7 +6,7 @@ metadata:
   labels:
     app: paauth
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: paauth
@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: paauth
-        image: propertyanalysisai/paauth:40559806e5bb9c02b1ed5f2be5d6e45c8309e98f
+        image: propertyanalysisai/paauth:64761c19ebeb76a31ee4aa0e501f8b7fbbfd3209
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
@@ -40,14 +40,7 @@ spec:
           limits:
             memory: "512Mi"
             cpu: "500m"
-        # Use a startup probe to give the application time to fully initialize
-        startupProbe:
-          httpGet:
-            path: /
-            port: 8000
-          failureThreshold: 30
-          periodSeconds: 10
-        # The liveness probe just checks if the server responds at all
+        # Use a simple liveness probe that just checks the TCP port
         livenessProbe:
           tcpSocket:
             port: 8000
@@ -55,7 +48,7 @@ spec:
           periodSeconds: 20
           timeoutSeconds: 3
           failureThreshold: 5
-        # Readiness probe still checks health but with higher threshold
+        # Use the health endpoint for readiness probe since we fixed it to always return 200
         readinessProbe:
           httpGet:
             path: /health

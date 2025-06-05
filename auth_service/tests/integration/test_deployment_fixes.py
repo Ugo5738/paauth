@@ -12,6 +12,7 @@ This script simulates the main lifecycle of the application:
 import asyncio
 import logging
 from typing import Optional
+import pytest
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +30,7 @@ from auth_service.config import settings
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("test_fixes")
 
+@pytest.mark.asyncio
 async def test_supabase_client():
     """Test Supabase client initialization and shutdown."""
     logger.info("Testing Supabase client initialization...")
@@ -59,6 +61,7 @@ async def test_supabase_client():
     await close_supabase_client()
     logger.info("Client shutdown complete")
 
+@pytest.mark.asyncio
 async def test_db_session():
     """Test database session creation and closure."""
     logger.info("Testing DB session...")
@@ -88,6 +91,7 @@ async def test_db_session():
         # We don't need to close it here, the context manager should handle it
         pass
 
+@pytest.mark.asyncio
 async def test_bootstrap():
     """Test the bootstrap process with the fixed code."""
     logger.info("Testing bootstrap process...")
@@ -114,6 +118,7 @@ async def test_bootstrap():
         # Let the session be closed by its context manager
         pass
 
+@pytest.mark.asyncio
 async def test_admin_user_creation():
     """Test the fixed create_admin_user function."""
     if not settings.initial_admin_email or not settings.initial_admin_password:

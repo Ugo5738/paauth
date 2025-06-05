@@ -14,7 +14,7 @@ services:
     ports:
       - "8000:8000" # Exposes auth_service on host port 8000
     env_file:
-      - .env.dev # Loads environment variables from .env file
+      - .env.dev
     volumes:
       # Mount the application source code
       # This maps your local ./src directory to /app/src in the container

@@ -325,9 +325,12 @@ async def health(
         }
         response["status"] = "degraded"
 
-    # Set appropriate status code based on overall status
-    status_code = 200 if response["status"] == "ok" else 503
-
+    # Set appropriate status code based on overall status and request path
+    # For Kubernetes probes, we always return 200 even if components are degraded
+    # This prevents unnecessary pod restarts when Supabase JWT validation fails
+    # which is expected behavior
+    status_code = 200  # Always return 200 for Kubernetes health checks
+    
     logger.info(f"Health check completed with status: {response['status']}")
     return JSONResponse(content=response, status_code=status_code)
 

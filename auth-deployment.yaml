@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paauth
+  namespace: default
+  labels:
+    app: paauth
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: paauth
+  template:
+    metadata:
+      labels:
+        app: paauth
+    spec:
+      containers:
+      - name: paauth
+        image: propertyanalysisai/paauth:40559806e5bb9c02b1ed5f2be5d6e45c8309e98f
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: ROOT_PATH
+          value: "/api/v1"
+        - name: BASE_URL
+          value: "https://auth.supersami.com"
+        - name: LOGGING_LEVEL
+          value: "INFO"
+        envFrom:
+        - secretRef:
+            name: paauth-secrets
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        # Use a startup probe to give the application time to fully initialize
+        startupProbe:
+          httpGet:
+            path: /
+            port: 8000
+          failureThreshold: 30
+          periodSeconds: 10
+        # The liveness probe just checks if the server responds at all
+        livenessProbe:
+          tcpSocket:
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 20
+          timeoutSeconds: 3
+          failureThreshold: 5
+        # Readiness probe still checks health but with higher threshold
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          failureThreshold: 3

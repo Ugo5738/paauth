@@ -30,7 +30,7 @@ server {
     # SSL/TLS certificates
     ssl_certificate /path/to/fullchain.pem;
     ssl_certificate_key /path/to/privkey.pem;
-    
+
     # TLS settings
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers on;
@@ -39,15 +39,15 @@ server {
     ssl_session_cache shared:SSL:50m;
     ssl_stapling on;
     ssl_stapling_verify on;
-    
+
     # HSTS (15768000 seconds = 6 months)
     add_header Strict-Transport-Security "max-age=15768000; includeSubDomains; preload";
-    
+
     # Other security headers
     add_header X-Content-Type-Options nosniff;
     add_header X-Frame-Options DENY;
     add_header X-XSS-Protection "1; mode=block";
-    
+
     location / {
         proxy_pass http://localhost:8000; # Assuming the auth service runs on port 8000
         proxy_set_header Host $host;

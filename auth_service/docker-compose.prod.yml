@@ -35,7 +35,7 @@ services:
     environment:
       - ENVIRONMENT=production
       - ROOT_PATH=/api/v1
-      - BASE_URL=https://${AUTH_DOMAIN:-auth.yourdomain.com}
+      - BASE_URL=https://${AUTH_DOMAIN:-auth.supersami.com}
       - LOGGING_LEVEL=INFO
     env_file:
       - .env.production
@@ -51,7 +51,7 @@ services:
       start_period: 20s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.auth.rule=Host(`${AUTH_DOMAIN:-auth.yourdomain.com}`)"
+      - "traefik.http.routers.auth.rule=Host(`${AUTH_DOMAIN:-auth.supersami.com}`)"
       - "traefik.http.routers.auth.entrypoints=websecure"
       - "traefik.http.routers.auth.tls.certresolver=letsencrypt"
       - "traefik.http.services.auth.loadbalancer.server.port=8000"

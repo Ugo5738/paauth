@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 from gotrue.errors import AuthApiError
 from gotrue.types import UserAttributes  # For password update payload
 from httpx import AsyncClient
-from tests.utils import create_mock_supa_user  # Absolute import from project root
+from tests.test_helpers import create_mock_supa_user  # Absolute import from project root
 
 from auth_service.dependencies.user_deps import (
     get_current_supabase_user as real_get_current_supabase_user,
@@ -19,7 +19,7 @@ from auth_service.main import app  # Required for dependency overrides
 from auth_service.supabase_client import get_supabase_client as real_get_supabase_client
 
 # Note: `create_mock_supa_session` is not used in these password tests directly,
-# but keeping utils consistent.
+# but keeping test_helpers consistent.
 
 
 @pytest.mark.asyncio

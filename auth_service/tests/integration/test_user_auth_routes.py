@@ -32,7 +32,7 @@ from auth_service.schemas.user_schemas import (  # Added for login, magic link, 
 )
 from auth_service.supabase_client import get_supabase_client as real_get_supabase_client
 
-from ..utils import (
+from ..test_helpers import (
     create_default_mock_settings,
     create_mock_supa_session,
     create_mock_supa_user,

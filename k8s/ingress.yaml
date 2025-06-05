@@ -9,19 +9,24 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    # kubernetes.io/ingress.class: alb
+    # alb.ingress.kubernetes.io/scheme: internet-facing
+    # alb.ingress.kubernetes.io/target-type: ip
+    # alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    # alb.ingress.kubernetes.io/ssl-redirect: '443'
 spec:
   tls:
-  - hosts:
-    - AUTH_DOMAIN_VALUE
-    secretName: paauth-tls
+    - hosts:
+        - AUTH_DOMAIN_VALUE
+      secretName: paauth-tls
   rules:
-  - host: AUTH_DOMAIN_VALUE
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: paauth
-            port:
-              number: 80
+    - host: AUTH_DOMAIN_VALUE
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: paauth
+                port:
+                  number: 80

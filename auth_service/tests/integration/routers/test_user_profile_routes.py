@@ -10,7 +10,7 @@ from fastapi import status
 from httpx import AsyncClient
 from sqlalchemy import text  # For raw SQL execution
 from sqlalchemy.ext.asyncio import AsyncSession
-from tests.utils import create_mock_supa_user  # Test utility
+from tests.test_helpers import create_mock_supa_user  # Test utility
 
 # Application-specific imports
 from auth_service.main import app

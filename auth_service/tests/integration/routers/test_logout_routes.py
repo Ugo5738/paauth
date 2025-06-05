@@ -6,7 +6,7 @@ import pytest
 from fastapi import HTTPException, status
 from gotrue.errors import AuthApiError
 from httpx import AsyncClient
-from tests.utils import (  # Absolute import from project root
+from tests.test_helpers import (  # Absolute import from project root
     create_mock_supa_session,
     create_mock_supa_user,
 )

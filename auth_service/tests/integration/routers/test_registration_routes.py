@@ -13,7 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Test utilities
-from tests.utils import create_mock_supa_session, create_mock_supa_user
+from tests.test_helpers import create_mock_supa_session, create_mock_supa_user
 
 from auth_service.config import settings as app_config_settings
 

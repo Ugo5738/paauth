@@ -14,7 +14,7 @@ from auth_service.schemas.app_client_schemas import (
     AppClientUpdateRequest
 )
 from auth_service.schemas.user_schemas import SupabaseUser # For type hinting
-from tests.utils import create_mock_supa_user # To create mock users
+from tests.test_helpers import create_mock_supa_user # To create mock users
 from auth_service.models.app_client import AppClient # To query DB
 from auth_service.models.role import Role # To create Role for test
 from auth_service.security import verify_client_secret # To verify hashed secret

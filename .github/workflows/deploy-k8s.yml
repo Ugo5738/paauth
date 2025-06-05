@@ -157,7 +157,7 @@ jobs:
           kubectl delete job paauth-migrations --ignore-not-found=true --namespace=default # Adjust namespace if needed
           kubectl apply -f ./processed-k8s/migration-job.yaml
           echo "Waiting for migration job to complete..."
-          kubectl wait --for=condition=complete job/paauth-migrations --timeout=5m --namespace=default # Adjust namespace
+          kubectl wait --for=condition=complete job/paauth-migrations --timeout=15m --namespace=default # Adjust namespace
           # Optional: Check job logs on failure
           status=$?
           if [ $status -ne 0 ]; then

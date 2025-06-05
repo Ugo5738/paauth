@@ -172,16 +172,14 @@ async def create_admin_user(email: str, password: str) -> Optional[SupabaseUser]
             "Admin Supabase client obtained. Listing users to check existence."
         )
 
-        user_list_response = await admin_supabase.auth.admin.list_users(
-            per_page=1000
-        )
+        user_list_response = await admin_supabase.auth.admin.list_users(per_page=1000)
 
         existing_admin_user_data = None
         # The response is a list directly, not an object with a users property
         if user_list_response:
             logger.debug(f"Got {len(user_list_response)} users from Supabase")
             for user_data in user_list_response:
-                if hasattr(user_data, 'email') and user_data.email == email:
+                if hasattr(user_data, "email") and user_data.email == email:
                     logger.info(
                         f"Admin user with email '{email}' already exists (ID: {user_data.id})."
                     )
@@ -335,7 +333,7 @@ async def create_admin_profile(db: AsyncSession, admin_supa_user: SupabaseUser) 
                 "username": created_profile.username,
                 "first_name": created_profile.first_name,
                 "last_name": created_profile.last_name,
-                "is_active": created_profile.is_active
+                "is_active": created_profile.is_active,
             }
             return ProfileCreate.model_validate(profile_dict)
         else:
@@ -354,7 +352,7 @@ async def create_admin_profile(db: AsyncSession, admin_supa_user: SupabaseUser) 
             "username": existing_profile.username,
             "first_name": existing_profile.first_name,
             "last_name": existing_profile.last_name,
-            "is_active": existing_profile.is_active
+            "is_active": existing_profile.is_active,
         }
         return ProfileCreate.model_validate(profile_dict)
 
@@ -427,6 +425,7 @@ async def run_bootstrap(db: AsyncSession, supabase: AsyncSupabaseClient = None):
     """Run the bootstrapping process. Can be called from CLI or during startup."""
     # This function ignores the supabase parameter since we're not using it directly
     # And bootstrap_admin_and_rbac doesn't need it anymore as it creates its own client
+
     success = await bootstrap_admin_and_rbac(db)
     if success:
         logger.info("Bootstrap process completed successfully")

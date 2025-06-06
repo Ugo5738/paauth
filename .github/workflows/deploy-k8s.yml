@@ -122,6 +122,7 @@ jobs:
           M2M_JWT_SECRET_KEY_B64=$(echo -n "$M2M_JWT_SECRET_KEY_VALUE" | base64 -w 0)
           REDIS_URL_B64=$(echo -n "$REDIS_URL_VALUE" | base64 -w 0)
           BASE_URL_B64=$(echo -n "$BASE_URL_VALUE" | base64 -w 0)
+          USE_PGBOUNCER_B64=$(echo -n "true" | base64 -w 0)
 
           sed_command_secrets="s|SUPABASE_URL_BASE64|$SUPABASE_URL_B64|g; "
           sed_command_secrets+="s|SUPABASE_ANON_KEY_BASE64|$SUPABASE_ANON_KEY_B64|g; "
@@ -129,7 +130,8 @@ jobs:
           sed_command_secrets+="s|AUTH_SERVICE_DATABASE_URL_BASE64|$AUTH_SERVICE_DATABASE_URL_B64|g; "
           sed_command_secrets+="s|M2M_JWT_SECRET_KEY_BASE64|$M2M_JWT_SECRET_KEY_B64|g; "
           sed_command_secrets+="s|REDIS_URL_BASE64|$REDIS_URL_B64|g; "
-          sed_command_secrets+="s|BASE_URL_BASE64|$BASE_URL_B64|g"
+          sed_command_secrets+="s|BASE_URL_BASE64|$BASE_URL_B64|g; "
+          sed_command_secrets+="s|dHJ1ZQ==|$USE_PGBOUNCER_B64|g"
           cat k8s/secrets.yaml | sed "$sed_command_secrets" > ./processed-k8s/secrets.yaml
 
           # Migration Job

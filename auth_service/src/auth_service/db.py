@@ -24,8 +24,62 @@ DB_COMMAND_TIMEOUT = 5  # Command execution timeout (5 seconds)
 DB_MAX_RETRIES = 3  # Number of retries for failed connections
 DB_RETRY_DELAY = 0.5  # Initial retry delay (will use exponential backoff)
 
-# Check for pgBouncer in connection string
-is_pgbouncer = "pgbouncer=true" in settings.auth_service_database_url
+# Parse database URL to handle special parameters like pgbouncer
+import urllib.parse
+
+# Parse the URL for modification
+def parse_db_url(url):
+    """Parse database URL and clean parameters not supported by the driver."""
+    # Check if pgBouncer is enabled
+    is_pgbouncer = "pgbouncer=true" in url
+    
+    # If pgBouncer is not enabled, return the URL as is
+    if not is_pgbouncer:
+        return url, is_pgbouncer
+    
+    # Handle URL parsing to remove the pgbouncer parameter
+    driver_prefix = ""
+    if url.startswith("postgresql+"):
+        driver_end = url.find("://")
+        if driver_end != -1:
+            driver_prefix = url[:driver_end+3]
+            url = url[driver_end+3:]
+    elif url.startswith("postgresql://"):
+        driver_prefix = "postgresql://"
+        url = url[len(driver_prefix):]
+    
+    # Split the URL into components
+    if "@" in url:
+        userpass, hostportdb = url.split("@", 1)
+    else:
+        userpass = ""
+        hostportdb = url
+    
+    # Handle query parameters
+    query_params = {}
+    if "?" in hostportdb:
+        hostportdb, query_string = hostportdb.split("?", 1)
+        for param in query_string.split("&"):
+            if "=" in param:
+                key, value = param.split("=", 1)
+                query_params[key] = value
+    
+    # Remove pgbouncer parameter
+    if "pgbouncer" in query_params:
+        del query_params["pgbouncer"]
+    
+    # Rebuild the URL without the pgbouncer parameter
+    clean_url = driver_prefix + userpass
+    if userpass:
+        clean_url += "@"
+    clean_url += hostportdb
+    if query_params:
+        clean_url += "?" + "&".join([f"{k}={v}" for k, v in query_params.items()])
+    
+    return clean_url, is_pgbouncer
+
+# Process the database URL
+clean_db_url, is_pgbouncer = parse_db_url(settings.auth_service_database_url)
 
 # Detect environment - we'll use this to enable/disable features that might not be supported in test env
 is_production = settings.is_production()
@@ -63,9 +117,17 @@ if is_production and is_pgbouncer:
     except Exception as e:
         logger.warning(f"Could not apply all pgBouncer optimizations: {e}")
 
+# Add pgBouncer-specific connection arguments if needed
+if is_pgbouncer:
+    # Disable prepared statement features which are incompatible with pgBouncer's transaction pooling mode
+    connect_args.update({
+        "prepared_statement_cache_size": 0,
+        "statement_cache_size": 0
+    })
+
 # Optimized engine configuration for Supabase Cloud with pgBouncer
 engine: AsyncEngine = create_async_engine(
-    settings.auth_service_database_url,
+    clean_db_url,  # Use the cleaned URL without the pgbouncer parameter
     echo=settings.logging_level.upper() == "DEBUG",
     
     # Connection pool settings - minimal pool since pgBouncer handles pooling

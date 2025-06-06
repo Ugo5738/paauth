@@ -5,9 +5,10 @@ import sqlalchemy.util.concurrency as _concurrency
 
 _concurrency._not_implemented = lambda *args, **kwargs: None
 
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func, text
+from sqlalchemy.pool import NullPool
 from sqlalchemy.exc import SQLAlchemyError, OperationalError, TimeoutError
 
 from auth_service.config import settings
@@ -28,9 +29,13 @@ DB_RETRY_DELAY = 1.0  # Longer initial retry delay for network latency
 import urllib.parse
 import os
 
-# Parse the URL to remove pgbouncer parameter if present
+# Parse the URL to remove pgbouncer parameter if present and adjust driver
 def parse_db_url(url):
     """Parse database URL and clean parameters not supported by the driver."""
+    # Replace asyncpg with psycopg if present
+    if "postgresql+asyncpg" in url:
+        url = url.replace("postgresql+asyncpg", "postgresql+psycopg")
+    
     # Check if pgBouncer parameter is in the URL
     has_pgbouncer_param = "pgbouncer=true" in url
     
@@ -48,6 +53,10 @@ def parse_db_url(url):
     elif url.startswith("postgresql://"):
         driver_prefix = "postgresql://"
         url = url[len(driver_prefix):]
+        
+    # Ensure we're using psycopg driver
+    if "postgresql+" not in driver_prefix:
+        driver_prefix = "postgresql+psycopg://"
     
     # Split the URL into components
     if "@" in url:
@@ -101,17 +110,15 @@ is_production = settings.is_production()
 
 # Connection arguments - set up base configuration
 connect_args = {
-    # Connection timeouts
-    "timeout": DB_CONNECT_TIMEOUT,
-    "command_timeout": DB_COMMAND_TIMEOUT,
-    
     # Server settings - critical for pgBouncer compatibility
-    "server_settings": {
-        "application_name": "paauth_service",
-        # READ COMMITTED is the only isolation level supported by pgBouncer
-        "default_transaction_isolation": "read committed"
-    }
+    "options": "-c application_name=paauth_service -c default_transaction_isolation=read\ committed"
 }
+
+# Add timeout settings if needed - psycopg3 has different parameter names
+connect_args.update({
+    "connect_timeout": DB_CONNECT_TIMEOUT,
+    "command_timeout": DB_COMMAND_TIMEOUT
+})
 
 # Add pgBouncer-specific optimizations for production
 if is_production and is_pgbouncer:
@@ -124,19 +131,14 @@ if is_production and is_pgbouncer:
 if is_pgbouncer:
     logger.info("Applying pgBouncer-specific connection arguments")
     
-    # Note: These parameters are the correct ones to use with SQLAlchemy
-    # Using prepared_statement_cache_size=0 effectively disables prepared statements
-    # This is critical for pgBouncer compatibility in transaction pooling mode
+    # psycopg3 handles pgBouncer better, we just need to use "options" instead of "server_settings"
+    # and disable prepared statements via the driver's specific parameters
     
-    # Update the server_settings without completely overwriting
-    connect_args["server_settings"].update({
-        # These settings are needed for pgBouncer compatibility
-        "default_transaction_isolation": "read committed",  # Required for pgBouncer
-    })
+    # For psycopg3, we disable prepared statements with the prepare parameter
+    connect_args["prepare"] = False
     
-    # Set prepared statement handling for asyncpg
-    # Setting these to 0 disables the prepared statement cache
-    connect_args["prepared_statement_cache_size"] = 0
+    # Add correct isolation level for pgBouncer
+    connect_args["options"] += " -c statement_timeout=0"
     
     # Log the full connection arguments for debugging
     logger.info(f"pgBouncer connect_args: {connect_args}")
@@ -144,43 +146,42 @@ if is_pgbouncer:
     # Add engine arguments for SQLAlchemy
     engine_args = {
         "echo": settings.logging_level.upper() == "DEBUG",
-        "pool_size": DB_POOL_SIZE,
-        "max_overflow": DB_MAX_OVERFLOW,
-        "pool_timeout": DB_POOL_TIMEOUT,
-        "pool_recycle": DB_POOL_RECYCLE,
+        "poolclass": NullPool,  # Use NullPool with pgBouncer to avoid connection pooling conflicts
         "pool_pre_ping": True,
         "connect_args": connect_args
     }
 
-# Optimized engine configuration for Supabase Cloud with pgBouncer
+# Create a standard set of engine arguments
+base_engine_args = {
+    "echo": settings.logging_level.upper() == "DEBUG",
+    "pool_pre_ping": True,
+    "connect_args": connect_args
+}
+
+# Add pooling config if not using pgBouncer
+if not is_pgbouncer:
+    base_engine_args.update({
+        "pool_size": DB_POOL_SIZE,
+        "max_overflow": DB_MAX_OVERFLOW,
+        "pool_timeout": DB_POOL_TIMEOUT,
+        "pool_recycle": DB_POOL_RECYCLE,
+    })
+else:
+    # Use NullPool when working with pgBouncer
+    base_engine_args["poolclass"] = NullPool
+    logger.info("Using NullPool with pgBouncer for better compatibility")
+
+# Create the engine with the appropriate settings
+engine: AsyncEngine = create_async_engine(clean_db_url, **base_engine_args)
+
 if is_pgbouncer:
-    # Use predefined engine arguments with pgBouncer compatibility settings
-    engine: AsyncEngine = create_async_engine(clean_db_url, **engine_args)
     logger.info("Created database engine with pgBouncer compatibility mode")
 else:
-    # Standard engine configuration without pgBouncer optimizations
-    engine: AsyncEngine = create_async_engine(
-        clean_db_url,  # Use the cleaned URL without the pgbouncer parameter
-        echo=settings.logging_level.upper() == "DEBUG",
-        
-        # Connection pool settings
-        pool_size=DB_POOL_SIZE,
-        max_overflow=DB_MAX_OVERFLOW,
-        pool_timeout=DB_POOL_TIMEOUT,
-        pool_recycle=DB_POOL_RECYCLE,
-        
-        # Connection health checks
-        pool_pre_ping=True,
-        
-        # Use our standard connect_args
-        connect_args=connect_args
-    )
     logger.info("Created standard database engine without pgBouncer mode")
 
-# Session factory for async sessions
-AsyncSessionLocal = sessionmaker(
+# Session factory for async sessions - using async_sessionmaker is recommended in SQLAlchemy 2.0
+AsyncSessionLocal = async_sessionmaker(
     bind=engine,
-    class_=AsyncSession,
     expire_on_commit=False,
     autoflush=False,
     autocommit=False,

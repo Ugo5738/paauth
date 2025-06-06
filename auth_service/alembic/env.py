@@ -256,6 +256,10 @@ async def run_migrations_online_async() -> None:
     # Get the database URL
     db_url = config.get_main_option("sqlalchemy.url")
     
+    # Replace asyncpg with psycopg if present
+    if 'postgresql+asyncpg:' in db_url:
+        db_url = db_url.replace('postgresql+asyncpg:', 'postgresql+psycopg:')
+    
     # Parse the URL to understand its components and clean pgbouncer parameter
     parsed = urlparse(db_url)
     query_params = parse_qs(parsed.query)
@@ -307,16 +311,15 @@ async def run_migrations_online_async() -> None:
     
     logger.info(f"Using database timeouts: connect={connect_timeout}s, command={command_timeout}s")
     
-    # Configure connection parameters with extended timeouts for migrations
+    # Configure connection parameters with extended timeouts for migrations - adapted for psycopg3
     connect_args = {
-        "timeout": connect_timeout,           # Connection establishment timeout
-        "command_timeout": command_timeout,  # Individual command timeout
-        "server_settings": {
-            "application_name": "paauth_alembic_migrations",
-            "default_transaction_isolation": "read committed",
-            "statement_timeout": str(statement_timeout * 1000),  # Convert to ms
-            "idle_in_transaction_session_timeout": str(idle_in_transaction_timeout * 1000),  # Convert to ms
-        }
+        "connect_timeout": connect_timeout,     # Connection establishment timeout
+        "command_timeout": command_timeout,    # Individual command timeout
+        "prepare": False,                      # Disable prepared statements for pgBouncer
+        "options": f"-c application_name=paauth_alembic_migrations "
+                  f"-c default_transaction_isolation=read\ committed "
+                  f"-c statement_timeout={statement_timeout * 1000} "
+                  f"-c idle_in_transaction_session_timeout={idle_in_transaction_timeout * 1000}"
     }
     
     # Engine arguments with NullPool to prevent connection pooling during migrations
@@ -327,12 +330,11 @@ async def run_migrations_online_async() -> None:
         "connect_args": connect_args
     }
     
-    # Add pgBouncer compatibility settings if needed
+    # Add pgBouncer compatibility settings if needed - simplified for psycopg3
     if use_pgbouncer:
         logger.info("Configuring for pgBouncer compatibility (disabling prepared statements)")
-        # These settings are critical for pgBouncer compatibility
-        connect_args["prepared_statement_cache_size"] = 0
-        connect_args["statement_cache_size"] = 0
+        # psycopg3 handles pgBouncer better with the prepare=False parameter
+        # which we've already set above
     
     # Log connection info for debugging
     parsed_for_log = urlparse(clean_url)

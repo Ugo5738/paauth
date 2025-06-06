@@ -197,6 +197,7 @@ jobs:
                       export USE_PGBOUNCER=false && \
                       export PYTHONUNBUFFERED=1 && \
                       export LOGGING_LEVEL=DEBUG && \
+                      echo "Using psycopg3 driver for better pgBouncer compatibility" && \
                       python -m alembic upgrade head
                   env:
                   # Get database URL from the secrets that we just applied

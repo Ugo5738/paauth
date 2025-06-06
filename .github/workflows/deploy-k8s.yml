@@ -150,11 +150,19 @@ jobs:
           echo "Manifests prepared in ./processed-k8s directory."
 
       - name: Apply Kubernetes Secrets
-        run: kubectl apply -f ./processed-k8s/secrets.yaml
+        run: |
+          echo "Applying Kubernetes secrets..."
+          kubectl apply -f ./processed-k8s/secrets.yaml
+          
+          # Wait a moment for the secrets to be available
+          echo "Waiting for secrets to be available..."
+          sleep 5
 
       - name: Create Migration Job
         run: |
           echo "Creating a dedicated migration job with increased resources..."
+          IMAGE="${DOCKER_REGISTRY_VALUE}/paauth:${IMAGE_TAG_VALUE}"
+          echo "Using image: $IMAGE"
           
           # Create a temporary file for the migration job
           cat << EOF > migration-job.yaml
@@ -170,7 +178,7 @@ jobs:
                 restartPolicy: Never
                 containers:
                 - name: migration
-                  image: ${IMAGE_NAME}
+                  image: "$IMAGE"
                   imagePullPolicy: Always
                   resources:
                     requests:
@@ -191,30 +199,66 @@ jobs:
                       export LOGGING_LEVEL=DEBUG && \
                       python -m alembic upgrade head
                   env:
-                  # Copy all env vars from the main deployment
+                  # Get database URL from the secrets that we just applied
+                  - name: AUTH_SERVICE_DATABASE_URL
+                    valueFrom:
+                      secretKeyRef:
+                        name: paauth-secrets
+                        key: AUTH_SERVICE_DATABASE_URL
+                  # Add other required environment variables
+                  - name: USE_PGBOUNCER
+                    value: "false"
+                  - name: DB_CONNECT_TIMEOUT
+                    value: "60"
+                  - name: DB_COMMAND_TIMEOUT 
+                    value: "60"
+                  - name: DB_STATEMENT_TIMEOUT
+                    value: "0"  # No timeout for long migrations
+                  - name: DB_IDLE_TIMEOUT
+                    value: "180"  # 3 minutes idle timeout
+                  - name: PYTHONUNBUFFERED
+                    value: "1"
           EOF
           
-          # Extract the env vars from the deployment and add them to the job
-          kubectl get configmap paauth-config -o jsonpath='{.data}' | jq -r 'to_entries[] | "                  - name: \(.key)\n                    valueFrom:\n                      configMapKeyRef:\n                        name: paauth-config\n                        key: \(.key)"' >> migration-job.yaml
-          
-          # Add any secret env vars
-          kubectl get secret paauth-secrets -o jsonpath='{.data}' | jq -r 'to_entries[] | "                  - name: \(.key)\n                    valueFrom:\n                      secretKeyRef:\n                        name: paauth-secrets\n                        key: \(.key)"' >> migration-job.yaml
-          
-          # Close the YAML file
-          echo "" >> migration-job.yaml
+          # Show the job YAML for debugging
+          echo "Generated migration job YAML:"
+          cat migration-job.yaml
           
           # Apply the migration job
           echo "Applying migration job..."
           kubectl apply -f migration-job.yaml
           
-          # Wait for the job to complete
-          echo "Waiting for migration job to complete..."
-          kubectl wait --for=condition=complete --timeout=300s job/paauth-migration-job
+          # Wait for the pod to be created
+          echo "Waiting for migration pod to be created..."
+          sleep 10
+          
+          # Get the pod name of the migration job
+          MIGRATION_POD=$(kubectl get pods --selector=job-name=paauth-migration-job -o jsonpath='{.items[0].metadata.name}')
+          if [ -z "$MIGRATION_POD" ]; then
+            echo "Error: Migration pod not found!"
+            kubectl get pods
+            exit 1
+          fi
+          echo "Migration pod created: $MIGRATION_POD"
+          
+          # Stream logs from the migration pod to see progress in real-time
+          echo "Streaming migration logs (will continue for 30 seconds)..."
+          kubectl logs -f $MIGRATION_POD --tail=100 & 
+          PID=$!
+          sleep 30
+          kill $PID || true
+          
+          # Now wait for job completion
+          echo "Waiting for migration job to complete (timeout: 5 minutes)..."
+          if ! kubectl wait --for=condition=complete --timeout=300s job/paauth-migration-job; then
+            echo "Migration job did not complete in time! Getting full logs..."
+            kubectl logs $MIGRATION_POD
+            exit 1
+          fi
           
           # Check if the job failed
           if kubectl get job paauth-migration-job -o jsonpath='{.status.failed}' | grep -q 1; then
-            echo "Migration job failed! Getting logs..."
-            MIGRATION_POD=$(kubectl get pods --selector=job-name=paauth-migration-job -o jsonpath='{.items[0].metadata.name}')
+            echo "Migration job failed! Getting failure details..."
             kubectl logs $MIGRATION_POD
             exit 1
           fi

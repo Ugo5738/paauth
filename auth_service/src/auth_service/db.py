@@ -15,14 +15,14 @@ from auth_service.logging_config import logger
 
 # Connection settings optimized for Supabase pgBouncer
 # Using minimal local pool since pgBouncer handles connection pooling
-DB_POOL_SIZE = 2  # Smaller local connection pool when using pgBouncer
-DB_MAX_OVERFLOW = 2  # Very limited overflow with pgBouncer
-DB_POOL_TIMEOUT = 5  # Fail faster when pool is exhausted (5 seconds)
-DB_POOL_RECYCLE = 60  # Short connection recycle time (1 minute) with pgBouncer
-DB_CONNECT_TIMEOUT = 10  # Connection timeout (10 seconds)
-DB_COMMAND_TIMEOUT = 5  # Command execution timeout (5 seconds)
-DB_MAX_RETRIES = 3  # Number of retries for failed connections
-DB_RETRY_DELAY = 0.5  # Initial retry delay (will use exponential backoff)
+DB_POOL_SIZE = 3  # Small local connection pool when using pgBouncer
+DB_MAX_OVERFLOW = 5  # Allow more overflow with pgBouncer in Kubernetes
+DB_POOL_TIMEOUT = 15  # Allow more time for getting a connection from the pool (15 seconds)
+DB_POOL_RECYCLE = 300  # Increased connection recycle time (5 minutes)
+DB_CONNECT_TIMEOUT = 30  # Increased connection timeout (30 seconds) for Kubernetes network conditions
+DB_COMMAND_TIMEOUT = 15  # Increased command timeout (15 seconds)
+DB_MAX_RETRIES = 5  # Increased number of retries for failed connections
+DB_RETRY_DELAY = 1.0  # Longer initial retry delay for network latency
 
 # Handle pgBouncer configuration using both URL parameter and environment variable
 import urllib.parse
@@ -122,16 +122,24 @@ if is_production and is_pgbouncer:
 
 # Add pgBouncer-specific connection arguments if needed
 if is_pgbouncer:
-    # Note: These parameters are the correct ones to use with SQLAlchemy's create_async_engine
-    # They correspond to asyncpg's "prepared_statement_cache_size" and "statement_cache_size"
-    # Do NOT use "prepare_threshold" directly - it's not supported by the driver
-    connect_args.update({
-        "server_settings": {
-            "application_name": "paauth_service",
-            # READ COMMITTED is the only isolation level supported by pgBouncer
-            "default_transaction_isolation": "read committed"
-        }
+    logger.info("Applying pgBouncer-specific connection arguments")
+    
+    # Note: These parameters are the correct ones to use with SQLAlchemy
+    # Using prepared_statement_cache_size=0 effectively disables prepared statements
+    # This is critical for pgBouncer compatibility in transaction pooling mode
+    
+    # Update the server_settings without completely overwriting
+    connect_args["server_settings"].update({
+        # These settings are needed for pgBouncer compatibility
+        "default_transaction_isolation": "read committed",  # Required for pgBouncer
     })
+    
+    # Set prepared statement handling for asyncpg
+    # Setting these to 0 disables the prepared statement cache
+    connect_args["prepared_statement_cache_size"] = 0
+    
+    # Log the full connection arguments for debugging
+    logger.info(f"pgBouncer connect_args: {connect_args}")
     
     # Add engine arguments for SQLAlchemy
     engine_args = {

@@ -97,13 +97,16 @@ async def test_create_admin_user():
     # Create an async context manager mock for the Supabase client
     class MockSupabaseContextManager:
         async def __aenter__(self):
-            return self.client
+            # Return self instead of client so we expose our own auth attribute
+            return self
             
         async def __aexit__(self, exc_type, exc_val, exc_tb):
             pass
             
         def __init__(self, mock_client):
             self.client = mock_client
+            # Important: Expose the auth attribute from the mock_client
+            self.auth = mock_client.auth
     
     # Create our mock Supabase client with the necessary structure
     mock_supabase = AsyncMock()
@@ -135,10 +138,9 @@ async def test_create_admin_user():
     # Setup the auth admin client methods
     mock_supabase.auth.admin.create_user.return_value = mock_response
     
-    # Mock list_users to simulate no existing users
-    mock_list_response = AsyncMock()
-    mock_list_response.users = []
-    mock_supabase.auth.admin.list_users.return_value = mock_list_response
+    # Mock the admin.list_users response for checking existing users
+    # In the actual implementation, list_users returns an array directly, not an object with users property
+    mock_supabase.auth.admin.list_users.return_value = []
     
     # Setup our context manager that will be returned by get_supabase_admin_client
     mock_context = MockSupabaseContextManager(mock_supabase)

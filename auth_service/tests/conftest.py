@@ -502,11 +502,38 @@ async def test_engine_fixture(
     apply_migrations_to_test_db: None,
 ) -> AsyncGenerator[AsyncEngine, None]:
     """Create test database engine."""
+    # Handle pgbouncer parameter properly
+    import urllib.parse
+    url_parts = urllib.parse.urlparse(TEST_DATABASE_URL)
+    query_dict = dict(urllib.parse.parse_qsl(url_parts.query))
+    
+    # Remove pgbouncer from URL query parameters
+    pgbouncer_enabled = False
+    if 'pgbouncer' in query_dict:
+        pgbouncer_enabled = query_dict.pop('pgbouncer') == 'true'
+        
+    # Reconstruct URL without pgbouncer parameter
+    clean_query = urllib.parse.urlencode(query_dict)
+    clean_url_parts = list(url_parts)
+    clean_url_parts[4] = clean_query  # index 4 is query
+    clean_url = urllib.parse.urlunparse(clean_url_parts)
+    
+    # Create connect_args dict with pgbouncer settings if needed
+    connect_args = {}
+    if pgbouncer_enabled:
+        connect_args.update({
+            "prepared_statement_cache_size": 0,
+            "statement_cache_size": 0
+        })
+        
+    logger.info(f"Using test database URL: {clean_url} with pgbouncer={pgbouncer_enabled}")
+    
     engine = create_async_engine(
-        TEST_DATABASE_URL,
+        clean_url,
         echo=False,
         future=True,
         pool_pre_ping=True,
+        connect_args=connect_args
     )
     yield engine
     await engine.dispose()

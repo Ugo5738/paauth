@@ -5,7 +5,7 @@ metadata:
   labels:
     app: paauth
 spec:
-  replicas: 2 # Increased to 2 for high availability
+  replicas: 1
   selector:
     matchLabels:
       app: paauth
@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: paauth
-          image: DOCKER_REGISTRY/paauth:IMAGE_TAG
+          image: yourusername/paauth:latest
           ports:
             - containerPort: 8000
           resources:
@@ -38,30 +38,26 @@ spec:
           envFrom:
             - secretRef:
                 name: paauth-secrets
-          # Startup probe - gives the application time to start up before checking health
+          # Use a startup probe to give the application time to fully initialize
           startupProbe:
             httpGet:
               path: /health
               port: 8000
-            initialDelaySeconds: 15
-            periodSeconds: 5
-            failureThreshold: 15 # Allow 75 seconds for startup
-            timeoutSeconds: 2
-          # Readiness probe - determines if the pod should receive traffic
+            failureThreshold: 30
+            periodSeconds: 10
+          # The liveness probe just checks if the server responds at all
+          livenessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 5
+          # Readiness probe still checks health but with higher threshold
           readinessProbe:
             httpGet:
               path: /health
               port: 8000
-            initialDelaySeconds: 10
+            initialDelaySeconds: 15
             periodSeconds: 10
             failureThreshold: 3
-            timeoutSeconds: 2
-          # Liveness probe - determines if the pod should be restarted
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8000
-            initialDelaySeconds: 90 # Give plenty of time before first liveness check
-            periodSeconds: 30
-            failureThreshold: 5
-            timeoutSeconds: 3

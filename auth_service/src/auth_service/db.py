@@ -104,11 +104,8 @@ if is_production and is_pgbouncer:
     # Only set these parameters in production with pgBouncer
     # These might not be supported in all asyncpg versions (especially in test containers)
     try:
+        # TCP keepalives help detect dead connections
         connect_args.update({
-            # pgBouncer doesn't support prepared statements
-            "prepare_threshold": 0,
-            
-            # TCP keepalives help detect dead connections
             "keepalives": 1,
             "keepalives_idle": 30,
             "keepalives_interval": 10,
@@ -116,33 +113,58 @@ if is_production and is_pgbouncer:
         })
     except Exception as e:
         logger.warning(f"Could not apply all pgBouncer optimizations: {e}")
+    
+    # Log that we're using pgBouncer compatibility mode
+    logger.info("Using pgBouncer compatibility mode: disabled prepared statements")
 
 # Add pgBouncer-specific connection arguments if needed
 if is_pgbouncer:
-    # Disable prepared statement features which are incompatible with pgBouncer's transaction pooling mode
+    # Note: These parameters are the correct ones to use with SQLAlchemy's create_async_engine
+    # They correspond to asyncpg's "prepared_statement_cache_size" and "statement_cache_size"
+    # Do NOT use "prepare_threshold" directly - it's not supported by the driver
     connect_args.update({
-        "prepared_statement_cache_size": 0,
-        "statement_cache_size": 0
+        "server_settings": {
+            "application_name": "paauth_service",
+            # READ COMMITTED is the only isolation level supported by pgBouncer
+            "default_transaction_isolation": "read committed"
+        }
     })
+    
+    # Add engine arguments for SQLAlchemy
+    engine_args = {
+        "echo": settings.logging_level.upper() == "DEBUG",
+        "pool_size": DB_POOL_SIZE,
+        "max_overflow": DB_MAX_OVERFLOW,
+        "pool_timeout": DB_POOL_TIMEOUT,
+        "pool_recycle": DB_POOL_RECYCLE,
+        "pool_pre_ping": True,
+        "connect_args": connect_args
+    }
 
 # Optimized engine configuration for Supabase Cloud with pgBouncer
-engine: AsyncEngine = create_async_engine(
-    clean_db_url,  # Use the cleaned URL without the pgbouncer parameter
-    echo=settings.logging_level.upper() == "DEBUG",
-    
-    # Connection pool settings - minimal pool since pgBouncer handles pooling
-    pool_size=DB_POOL_SIZE,
-    max_overflow=DB_MAX_OVERFLOW,
-    pool_timeout=DB_POOL_TIMEOUT,
-    pool_recycle=DB_POOL_RECYCLE,
-    
-    # Very important for pgBouncer: pre-ping ensures connections are valid
-    # This sends a small query before each connection use to verify it's alive
-    pool_pre_ping=True,
-    
-    # Use our optimized connect_args
-    connect_args=connect_args
-)
+if is_pgbouncer:
+    # Use predefined engine arguments with pgBouncer compatibility settings
+    engine: AsyncEngine = create_async_engine(clean_db_url, **engine_args)
+    logger.info("Created database engine with pgBouncer compatibility mode")
+else:
+    # Standard engine configuration without pgBouncer optimizations
+    engine: AsyncEngine = create_async_engine(
+        clean_db_url,  # Use the cleaned URL without the pgbouncer parameter
+        echo=settings.logging_level.upper() == "DEBUG",
+        
+        # Connection pool settings
+        pool_size=DB_POOL_SIZE,
+        max_overflow=DB_MAX_OVERFLOW,
+        pool_timeout=DB_POOL_TIMEOUT,
+        pool_recycle=DB_POOL_RECYCLE,
+        
+        # Connection health checks
+        pool_pre_ping=True,
+        
+        # Use our standard connect_args
+        connect_args=connect_args
+    )
+    logger.info("Created standard database engine without pgBouncer mode")
 
 # Session factory for async sessions
 AsyncSessionLocal = sessionmaker(

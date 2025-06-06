@@ -372,6 +372,9 @@ async def health(
         request.headers.get("user-agent", "").lower().startswith("kube-probe")
     )
 
+    # Also check for diagnostic mode - bypasses caching and always tests DB
+    is_diagnostic = request.query_params.get("diagnostic") == "true"
+    
     # Get current time
     current_time = datetime.datetime.utcnow()
 
@@ -383,15 +386,19 @@ async def health(
         "timestamp": current_time.isoformat(),
         "components": {"api": {"status": "ok"}},
     }
+    
+    # Add pgBouncer info to help diagnose issues
+    from auth_service.db import is_pgbouncer
+    response["pgbouncer_mode"] = is_pgbouncer
 
-    # Use cache if available and not expired
+    # Use cache if available and not expired, but skip cache in diagnostic mode
     cache = _health_check_cache
     if (
-        cache["last_check"]
+        not is_diagnostic
+        and cache["last_check"]
         and cache["result"]
         and (time.time() - cache["last_check"]) < cache["cache_ttl_seconds"]
     ):
-
         # Update timestamp but keep other results from cache
         result = cache["result"].copy()
         result["timestamp"] = current_time.isoformat()
@@ -415,7 +422,8 @@ async def health(
         return JSONResponse(content=result, status_code=200)
 
     # Determine if we should do a DB check this time
-    should_check_db = cache["db_check_counter"] >= cache["db_check_interval"]
+    # Always check DB in diagnostic mode
+    should_check_db = is_diagnostic or cache["db_check_counter"] >= cache["db_check_interval"]
     if should_check_db:
         cache["db_check_counter"] = 0
     else:
@@ -425,24 +433,39 @@ async def health(
     if should_check_db:
         try:
             # Use a very short operation for the db check
+            start_time = time.time()
             await db.execute(text("SELECT 1"))
-            response["components"]["database"] = {"status": "ok"}
+            query_time = time.time() - start_time
+            response["components"]["database"] = {
+                "status": "ok",
+                "response_time_ms": round(query_time * 1000, 2),
+            }
         except Exception as e:
             error_message = str(e)
             error_type = e.__class__.__name__
 
             # Log error but with reduced verbosity for common timeout errors
             if "timeout" in error_message.lower():
-                logger.warning(f"Health check - Database timeout: {error_type}")
+                logger.warning(f"Health check - Database timeout: {error_type}: {error_message[:100]}")
             else:
                 logger.error(
-                    f"Health check - Database error: {error_message}", exc_info=True
+                    f"Health check - Database error: {error_type}: {error_message}", 
+                    exc_info=True
                 )
 
-            response["components"]["database"] = {
+            # Include more detailed error information for diagnostics
+            db_error = {
                 "status": "error",
                 "message": "Database connection failed",
+                "error_type": error_type,
+                "is_timeout": "timeout" in error_message.lower(),
             }
+            
+            # Only include error details in non-k8s probe responses or diagnostic mode
+            if not is_k8s_probe or is_diagnostic:
+                db_error["error_message"] = error_message[:200] if len(error_message) > 200 else error_message
+                
+            response["components"]["database"] = db_error
 
             # Only mark as degraded for non-k8s requests
             if not is_k8s_probe:

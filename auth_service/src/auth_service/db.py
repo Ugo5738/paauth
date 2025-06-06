@@ -195,9 +195,16 @@ async def verify_db_connection(session: AsyncSession, retries=1) -> bool:
     Verify database connection with retry logic.
     Returns True if connection is successful, False otherwise.
     """
+    # Log database connection details for debugging (without exposing credentials)
+    parsed_url = urllib.parse.urlparse(clean_db_url)
+    masked_url = f"{parsed_url.scheme}://{parsed_url.hostname}:{parsed_url.port}{parsed_url.path}"
+    logger.info(f"Attempting database connection to: {masked_url}")
+    logger.info(f"pgBouncer mode: {is_pgbouncer}")
+    
     for attempt in range(retries + 1):
         try:
             # Execute a simple query to verify connection
+            logger.info(f"Database connection attempt {attempt + 1}/{retries + 1}")
             await session.execute(text("SELECT 1"))
             if attempt > 0:
                 logger.info(f"Database connection restored on attempt {attempt + 1}")
@@ -206,12 +213,26 @@ async def verify_db_connection(session: AsyncSession, retries=1) -> bool:
             if attempt < retries:
                 wait_time = DB_RETRY_DELAY * (2 ** attempt)  # Exponential backoff
                 logger.warning(
-                    f"Database connection attempt {attempt + 1} failed: {str(e)}. "
+                    f"Database connection attempt {attempt + 1} failed: {e.__class__.__name__}: {str(e)}. "
                     f"Retrying in {wait_time:.2f}s..."
                 )
                 await asyncio.sleep(wait_time)
             else:
-                logger.error(f"Failed to connect to database after {retries + 1} attempts: {str(e)}")
+                logger.error(
+                    f"Failed to connect to database after {retries + 1} attempts. "
+                    f"Error: {e.__class__.__name__}: {str(e)}", 
+                    exc_info=True
+                )
+                return False
+        except Exception as e:
+            logger.error(
+                f"Unexpected error during database connection: {e.__class__.__name__}: {str(e)}", 
+                exc_info=True
+            )
+            if attempt < retries:
+                wait_time = DB_RETRY_DELAY * (2 ** attempt)
+                await asyncio.sleep(wait_time)
+            else:
                 return False
     return False
 
@@ -231,49 +252,58 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     session = None
     start_time = time.time()
     
-    # Session creation with retry logic
-    for attempt in range(DB_MAX_RETRIES + 1):
-        try:
-            session = AsyncSessionLocal()
-            
-            # Verify the connection works
-            connection_ok = await verify_db_connection(session, retries=0)
-            if not connection_ok:
-                if session:
-                    await session.close()
-                raise OperationalError("Connection test failed", None, None)
-                
-            # Connection successful - yield the session
-            break
-                
-        except (SQLAlchemyError, TimeoutError) as e:
-            # Close the failed session if it was created
+    # Add more retries in production environment for Kubernetes
+    retries = DB_MAX_RETRIES * 2 if settings.is_production() else DB_MAX_RETRIES
+    
+    try:
+        # Create a new session
+        logger.debug("Creating new database session")
+        session = AsyncSessionLocal()
+        
+        # Log connection attempt
+        logger.info(f"Verifying database connection with {retries} retries")
+        
+        # Verify connection with retry logic
+        connection_ok = await verify_db_connection(session, retries=retries)
+        if not connection_ok:
             if session:
                 try:
                     await session.close()
-                except Exception:
-                    pass
-                    
-            # Check if we should retry
-            if attempt < DB_MAX_RETRIES:
-                retry_delay = DB_RETRY_DELAY * (2 ** attempt)  # Exponential backoff
-                logger.warning(
-                    f"Database session creation attempt {attempt + 1} failed: {e.__class__.__name__}: {str(e)}. "
-                    f"Retrying in {retry_delay:.2f}s..."
-                )
-                await asyncio.sleep(retry_delay)
-            else:
-                logger.error(
-                    f"Failed to create database session after {DB_MAX_RETRIES + 1} attempts. "
-                    f"Last error: {e.__class__.__name__}: {str(e)}"
-                )
-                # Re-raise the exception to be handled by the caller (e.g., FastAPI exception handlers)
-                raise
+                except Exception as e:
+                    logger.warning(f"Failed to close session after connection failure: {e}")
+            raise RuntimeError("Failed to establish database connection after retries")
+    except Exception as e:
+        # Handle session creation errors
+        elapsed = time.time() - start_time
+        error_class = e.__class__.__name__
+        error_msg = str(e)
+        
+        # Log detailed error information
+        if "timeout" in error_msg.lower():
+            logger.error(f"Database connection timeout after {elapsed:.3f}s: {error_class}: {error_msg}")
+            # Log connection details (without credentials) to help debug the issue
+            parsed_url = urllib.parse.urlparse(clean_db_url)
+            logger.error(
+                f"DB connection failed. Host: {parsed_url.hostname}, Port: {parsed_url.port}, "
+                f"pgBouncer mode: {is_pgbouncer}, Connect timeout: {DB_CONNECT_TIMEOUT}s"
+            )
+        else:
+            logger.error(
+                f"Database session creation failed after {elapsed:.3f}s: {error_class}: {error_msg}", 
+                exc_info=True
+            )
+        
+        # Close session if it was created but not working
+        if session:
+            try:
+                await session.close()
+            except Exception as close_error:
+                logger.warning(f"Error closing failed session: {close_error.__class__.__name__}: {str(close_error)}")
+        
+        # Re-raise the exception
+        raise
     
     # If we got here, we have a working session
-    if not session:
-        raise RuntimeError("Failed to create database session for unknown reason")
-        
     try:
         # Actually yield the session to be used
         yield session
@@ -282,17 +312,18 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         try:
             await session.rollback()
         except Exception as rollback_error:
-            logger.warning(f"Error during session rollback: {str(rollback_error)}")
-            
+            logger.warning(f"Error during session rollback: {rollback_error.__class__.__name__}: {str(rollback_error)}")
+        
         # Re-raise the original exception
         raise
     finally:
         # Always clean up the session
-        try:
-            await session.close()
-            if settings.logging_level.upper() == "DEBUG":
-                elapsed = time.time() - start_time
-                logger.debug(f"Database session closed after {elapsed:.3f}s")
-        except Exception as close_error:
-            logger.warning(f"Error closing database session: {str(close_error)}")
-            # Don't re-raise close errors - we want to ensure the session is always closed
+        if session is not None:
+            try:
+                await session.close()
+                if settings.logging_level.upper() == "DEBUG":
+                    elapsed = time.time() - start_time
+                    logger.debug(f"Database session closed after {elapsed:.3f}s")
+            except Exception as close_error:
+                logger.warning(f"Error closing database session: {close_error.__class__.__name__}: {str(close_error)}")
+                # Don't re-raise close errors - we want to ensure the session gets cleaned up

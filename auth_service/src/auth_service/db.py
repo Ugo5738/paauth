@@ -24,18 +24,19 @@ DB_COMMAND_TIMEOUT = 5  # Command execution timeout (5 seconds)
 DB_MAX_RETRIES = 3  # Number of retries for failed connections
 DB_RETRY_DELAY = 0.5  # Initial retry delay (will use exponential backoff)
 
-# Parse database URL to handle special parameters like pgbouncer
+# Handle pgBouncer configuration using both URL parameter and environment variable
 import urllib.parse
+import os
 
-# Parse the URL for modification
+# Parse the URL to remove pgbouncer parameter if present
 def parse_db_url(url):
     """Parse database URL and clean parameters not supported by the driver."""
-    # Check if pgBouncer is enabled
-    is_pgbouncer = "pgbouncer=true" in url
+    # Check if pgBouncer parameter is in the URL
+    has_pgbouncer_param = "pgbouncer=true" in url
     
-    # If pgBouncer is not enabled, return the URL as is
-    if not is_pgbouncer:
-        return url, is_pgbouncer
+    # If there's no pgbouncer parameter, return the URL as is
+    if not has_pgbouncer_param:
+        return url
     
     # Handle URL parsing to remove the pgbouncer parameter
     driver_prefix = ""
@@ -76,10 +77,24 @@ def parse_db_url(url):
     if query_params:
         clean_url += "?" + "&".join([f"{k}={v}" for k, v in query_params.items()])
     
-    return clean_url, is_pgbouncer
+    return clean_url
 
-# Process the database URL
-clean_db_url, is_pgbouncer = parse_db_url(settings.auth_service_database_url)
+# First clean the URL of any pgbouncer parameters
+clean_db_url = parse_db_url(settings.auth_service_database_url)
+
+# Determine if pgBouncer should be used - check both URL and environment variable
+# Environment variable takes precedence over URL parameter
+use_pgbouncer_env = os.environ.get("USE_PGBOUNCER", "").lower()
+
+# Default to true if pgbouncer=true was in the URL
+is_pgbouncer = "pgbouncer=true" in settings.auth_service_database_url 
+
+# Override with environment variable if specified
+if use_pgbouncer_env in ("true", "false"):
+    is_pgbouncer = (use_pgbouncer_env == "true")
+    logger.info(f"pgBouncer mode set from environment variable: {is_pgbouncer}")
+else:
+    logger.info(f"pgBouncer mode detected from URL: {is_pgbouncer}")
 
 # Detect environment - we'll use this to enable/disable features that might not be supported in test env
 is_production = settings.is_production()

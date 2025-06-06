@@ -170,53 +170,15 @@ jobs:
             exit 1
           fi
           
-          # Run migrations directly in the application pod with modified environment variables
+          # Run migrations directly in the application pod using environment variables
           echo "Running migrations directly in application pod..."
-          # Use a more direct approach with an env-modifying script
-          kubectl exec $POD_NAME -- bash -c "cd /app && cat > /tmp/clean_db_url.py << 'EOF'
-#!/usr/bin/env python3
-import os
-import sys
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
-
-# Get the database URL from environment
-db_url = os.environ.get('DATABASE_URL')
-if not db_url:
-    print('DATABASE_URL not found, checking AUTH_SERVICE_DATABASE_URL')
-    db_url = os.environ.get('AUTH_SERVICE_DATABASE_URL')
-
-if not db_url:
-    print('No database URL found in environment')
-    sys.exit(1)
-
-print('Modifying database URL for pgBouncer compatibility')
-
-# Parse the URL and remove pgbouncer parameter
-parsed = urlparse(db_url)
-query_params = parse_qs(parsed.query)
-
-if 'pgbouncer' in query_params:
-    query_params.pop('pgbouncer')
-    print('Removed pgbouncer parameter from URL')
-
-# Rebuild URL
-query_string = urlencode(query_params, doseq=True)
-clean_url = urlunparse(
-    (parsed.scheme, parsed.netloc, parsed.path, parsed.params, query_string, parsed.fragment)
-)
-
-print(f'Clean URL: {clean_url}')
-print(clean_url)
-EOF"
-
-          # Make the script executable and run migrations with the cleaned URL
-          kubectl exec $POD_NAME -- bash -c "chmod +x /tmp/clean_db_url.py && cd /app && \
-          export CLEAN_DB_URL=\$(python3 /tmp/clean_db_url.py | tail -n 1) && \
-          echo 'Using cleaned URL:' \$CLEAN_DB_URL && \
+          echo "Using environment variable approach for pgBouncer control..."
+          
+          # Run migrations with the USE_PGBOUNCER environment variable set to false
+          # This is a cleaner approach than URL parsing/modification
+          kubectl exec $POD_NAME -- bash -c "cd /app && \
           PYTHONPATH=/app \
-          SQLALCHEMY_URL=\$CLEAN_DB_URL \
-          DATABASE_URL=\$CLEAN_DB_URL \
-          AUTH_SERVICE_DATABASE_URL=\$CLEAN_DB_URL \
+          USE_PGBOUNCER=false \
           alembic upgrade head"
           
           # Check the status

@@ -240,27 +240,38 @@ async def verify_schema_after_migration(connection) -> None:
 
 async def run_migrations_online_async() -> None:
     """Run migrations in 'online' mode asynchronously."""
-    # Parse the URL to handle pgbouncer parameter correctly
+    # Get the database URL
     db_url = config.get_main_option("sqlalchemy.url")
     
-    # Parse the URL to extract and remove pgbouncer parameter if present
-    from urllib.parse import urlparse, parse_qs, urlunparse
+    # Clean the URL of pgbouncer parameter if present
+    from urllib.parse import urlparse, parse_qs, urlunparse, urlencode
+    import os
     
+    # Parse the URL
     parsed = urlparse(db_url)
     query_params = parse_qs(parsed.query)
     
-    # Extract pgbouncer parameter if present
-    pgbouncer = False
+    # First check if pgbouncer parameter is in the URL
+    url_has_pgbouncer = False
     if 'pgbouncer' in query_params:
-        pgbouncer_value = query_params.pop('pgbouncer')[0].lower()
-        pgbouncer = pgbouncer_value == 'true'
+        url_has_pgbouncer = query_params.pop('pgbouncer')[0].lower() == 'true'
     
-    # Rebuild URL without pgbouncer parameter
-    from urllib.parse import urlencode
+    # Always rebuild URL without the pgbouncer parameter
     query_string = urlencode(query_params, doseq=True)
     clean_url = urlunparse(
         (parsed.scheme, parsed.netloc, parsed.path, parsed.params, query_string, parsed.fragment)
     )
+    
+    # Check environment variable which takes precedence
+    use_pgbouncer_env = os.environ.get("USE_PGBOUNCER", "").lower()
+    
+    # Determine final pgbouncer setting
+    use_pgbouncer = url_has_pgbouncer  # Default to URL value
+    if use_pgbouncer_env in ("true", "false"):
+        use_pgbouncer = (use_pgbouncer_env == "true")
+        print(f"Using pgBouncer setting from environment: {use_pgbouncer}")
+    else:
+        print(f"Using pgBouncer setting from URL: {use_pgbouncer}")
     
     # Setup engine with connect_args for pgBouncer if needed
     engine_args = {
@@ -268,7 +279,8 @@ async def run_migrations_online_async() -> None:
         "future": True,  # Ensure future=True for SQLAlchemy 2.0 features
     }
     
-    if pgbouncer:
+    if use_pgbouncer:
+        print("Configuring for pgBouncer compatibility (disabling prepared statements)")
         engine_args["connect_args"] = {
             "prepared_statement_cache_size": 0,
             "statement_cache_size": 0

@@ -152,67 +152,81 @@ jobs:
       - name: Apply Kubernetes Secrets
         run: kubectl apply -f ./processed-k8s/secrets.yaml
 
-      - name: Run Database Migrations
+      - name: Create Migration Job
         run: |
-          echo "Using enhanced migration approach with improved connection handling..."
-          # First deploy the main application without waiting for readiness
-          kubectl apply -f ./processed-k8s/deployment.yaml
+          echo "Creating a dedicated migration job with increased resources..."
           
-          # Wait for the pod to be created
-          echo "Waiting for application pod to be created..."
-          sleep 15  # Increased wait time for pod creation
+          # Create a temporary file for the migration job
+          cat << EOF > migration-job.yaml
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: paauth-migration-job
+          spec:
+            ttlSecondsAfterFinished: 600  # Auto-delete after 10 minutes
+            backoffLimit: 3
+            template:
+              spec:
+                restartPolicy: Never
+                containers:
+                - name: migration
+                  image: ${IMAGE_NAME}
+                  imagePullPolicy: Always
+                  resources:
+                    requests:
+                      memory: "512Mi"
+                      cpu: "250m"
+                    limits:
+                      memory: "1Gi"
+                      cpu: "500m"
+                  command: ["/bin/bash"]
+                  args:
+                    - "-c"
+                    - |
+                      cd /app && \
+                      echo "Running migrations directly to database (bypassing pgBouncer)..." && \
+                      export PYTHONPATH=/app && \
+                      export USE_PGBOUNCER=false && \
+                      export PYTHONUNBUFFERED=1 && \
+                      export LOGGING_LEVEL=DEBUG && \
+                      python -m alembic upgrade head
+                  env:
+                  # Copy all env vars from the main deployment
+          EOF
           
-          # Get the pod name
-          POD_NAME=$(kubectl get pods -l app=paauth -o jsonpath="{.items[0].metadata.name}")
-          echo "Found pod: $POD_NAME"
+          # Extract the env vars from the deployment and add them to the job
+          kubectl get configmap paauth-config -o jsonpath='{.data}' | jq -r 'to_entries[] | "                  - name: \(.key)\n                    valueFrom:\n                      configMapKeyRef:\n                        name: paauth-config\n                        key: \(.key)"' >> migration-job.yaml
           
-          if [ -z "$POD_NAME" ]; then
-            echo "Error: Could not find application pod"
-            kubectl get pods
+          # Add any secret env vars
+          kubectl get secret paauth-secrets -o jsonpath='{.data}' | jq -r 'to_entries[] | "                  - name: \(.key)\n                    valueFrom:\n                      secretKeyRef:\n                        name: paauth-secrets\n                        key: \(.key)"' >> migration-job.yaml
+          
+          # Close the YAML file
+          echo "" >> migration-job.yaml
+          
+          # Apply the migration job
+          echo "Applying migration job..."
+          kubectl apply -f migration-job.yaml
+          
+          # Wait for the job to complete
+          echo "Waiting for migration job to complete..."
+          kubectl wait --for=condition=complete --timeout=300s job/paauth-migration-job
+          
+          # Check if the job failed
+          if kubectl get job paauth-migration-job -o jsonpath='{.status.failed}' | grep -q 1; then
+            echo "Migration job failed! Getting logs..."
+            MIGRATION_POD=$(kubectl get pods --selector=job-name=paauth-migration-job -o jsonpath='{.items[0].metadata.name}')
+            kubectl logs $MIGRATION_POD
             exit 1
           fi
           
-          # Run migrations directly in the application pod using environment variables
-          echo "Running migrations directly in application pod..."
-          echo "Using direct database connection for migrations (bypassing pgBouncer)..."
+          echo "Migration job completed successfully!"
           
-          # Modified approach: 
-          # 1. Explicitly set USE_PGBOUNCER=false for migrations
-          # 2. Increase logging verbosity
-          # 3. Add retry attempts
-          kubectl exec $POD_NAME -- bash -c "cd /app && \
-          PYTHONPATH=/app \
-          USE_PGBOUNCER=false \
-          LOGGING_LEVEL=DEBUG \
-          PYTHONUNBUFFERED=1 \
-          python -m alembic upgrade head"
+          # Delete the job to clean up
+          kubectl delete job paauth-migration-job
           
-          # Check the status
-          status=$?
-          if [ $status -ne 0 ]; then
-            echo "Migration failed! Collecting diagnostic information..."
-            kubectl logs $POD_NAME --tail=100
-            echo "Database connection issue detected. Will try with longer timeouts..."
-            
-            # Second attempt with extended timeouts
-            echo "Attempting migration again with extended timeouts..."
-            kubectl exec $POD_NAME -- bash -c "cd /app && \
-            PYTHONPATH=/app \
-            USE_PGBOUNCER=false \
-            DB_CONNECT_TIMEOUT=45 \
-            DB_COMMAND_TIMEOUT=45 \
-            LOGGING_LEVEL=DEBUG \
-            PYTHONUNBUFFERED=1 \
-            python -m alembic upgrade head"
-            
-            status=$?
-            if [ $status -ne 0 ]; then
-              echo "Migration failed after multiple attempts"
-              exit $status
-            fi
-          fi
-          
-          echo "Migration completed successfully. Application will use pgBouncer=true in normal operation."
+          # Now deploy the main application
+          echo "Deploying main application..."
+          kubectl apply -f ./processed-k8s/deployment.yaml
 
       - name: Deploy Application
         run: |

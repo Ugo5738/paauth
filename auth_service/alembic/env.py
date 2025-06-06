@@ -298,14 +298,24 @@ async def run_migrations_online_async() -> None:
         
     logger.info(f"Final pgBouncer setting for migrations: {use_pgbouncer}")
     
-    # Configure connection parameters
-    # We'll use a longer timeout for migrations and disable connection pooling
+    # Configure connection parameters with timeouts from environment or defaults
+    # Allow override via environment variables for different deployment scenarios
+    connect_timeout = int(os.environ.get("DB_CONNECT_TIMEOUT", 60))  # Increased default to 60s
+    command_timeout = int(os.environ.get("DB_COMMAND_TIMEOUT", 60))   # Increased default to 60s
+    statement_timeout = int(os.environ.get("DB_STATEMENT_TIMEOUT", 0)) # 0 = no timeout (for long migrations)
+    idle_in_transaction_timeout = int(os.environ.get("DB_IDLE_TIMEOUT", 180)) # 3 minutes
+    
+    logger.info(f"Using database timeouts: connect={connect_timeout}s, command={command_timeout}s")
+    
+    # Configure connection parameters with extended timeouts for migrations
     connect_args = {
-        "timeout": 30,  # 30-second connection timeout
-        "command_timeout": 30,  # 30-second command timeout
+        "timeout": connect_timeout,           # Connection establishment timeout
+        "command_timeout": command_timeout,  # Individual command timeout
         "server_settings": {
             "application_name": "paauth_alembic_migrations",
             "default_transaction_isolation": "read committed",
+            "statement_timeout": str(statement_timeout * 1000),  # Convert to ms
+            "idle_in_transaction_session_timeout": str(idle_in_transaction_timeout * 1000),  # Convert to ms
         }
     }
     

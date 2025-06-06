@@ -116,18 +116,6 @@ connect_args = {
 # Add pgBouncer-specific optimizations for production
 if is_production and is_pgbouncer:
     logger.info("Using production pgBouncer connection optimizations")
-    # Only set these parameters in production with pgBouncer
-    # These might not be supported in all asyncpg versions (especially in test containers)
-    try:
-        # TCP keepalives help detect dead connections
-        connect_args.update({
-            "keepalives": 1,
-            "keepalives_idle": 30,
-            "keepalives_interval": 10,
-            "keepalives_count": 3
-        })
-    except Exception as e:
-        logger.warning(f"Could not apply all pgBouncer optimizations: {e}")
     
     # Log that we're using pgBouncer compatibility mode
     logger.info("Using pgBouncer compatibility mode: disabled prepared statements")

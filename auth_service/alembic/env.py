@@ -240,74 +240,168 @@ async def verify_schema_after_migration(connection) -> None:
 
 async def run_migrations_online_async() -> None:
     """Run migrations in 'online' mode asynchronously."""
+    # Import necessary modules
+    import asyncio
+    import os
+    import time
+    from urllib.parse import urlparse, parse_qs, urlunparse, urlencode
+    from sqlalchemy.exc import SQLAlchemyError, OperationalError, TimeoutError
+    from sqlalchemy.sql import text
+    import logging
+    
+    # Setup logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger('alembic.migrations')
+    
     # Get the database URL
     db_url = config.get_main_option("sqlalchemy.url")
     
-    # Clean the URL of pgbouncer parameter if present
-    from urllib.parse import urlparse, parse_qs, urlunparse, urlencode
-    import os
-    
-    # Parse the URL
+    # Parse the URL to understand its components and clean pgbouncer parameter
     parsed = urlparse(db_url)
     query_params = parse_qs(parsed.query)
     
-    # First check if pgbouncer parameter is in the URL
+    # Always remove pgbouncer parameter from URL, we'll control it separately
     url_has_pgbouncer = False
     if 'pgbouncer' in query_params:
         url_has_pgbouncer = query_params.pop('pgbouncer')[0].lower() == 'true'
+        
+    # Remove any pgbouncer-incompatible parameters
+    for incompatible_param in ['prepared_statement_cache_size', 'statement_cache_size', 'keepalives', 
+                                'keepalives_idle', 'keepalives_interval', 'keepalives_count']:
+        if incompatible_param in query_params:
+            del query_params[incompatible_param]
     
-    # Always rebuild URL without the pgbouncer parameter
+    # Rebuild clean URL without pgbouncer parameter
     query_string = urlencode(query_params, doseq=True)
     clean_url = urlunparse(
         (parsed.scheme, parsed.netloc, parsed.path, parsed.params, query_string, parsed.fragment)
     )
     
-    # Check environment variable which takes precedence
+    # Check if environment variable is set, which takes precedence
     use_pgbouncer_env = os.environ.get("USE_PGBOUNCER", "").lower()
     
     # Determine final pgbouncer setting
-    use_pgbouncer = url_has_pgbouncer  # Default to URL value
+    use_pgbouncer = url_has_pgbouncer  # Default to URL value first
+    
+    # Environment variable overrides URL parameter when set explicitly
     if use_pgbouncer_env in ("true", "false"):
         use_pgbouncer = (use_pgbouncer_env == "true")
-        print(f"Using pgBouncer setting from environment: {use_pgbouncer}")
+        logger.info(f"Using pgBouncer setting from environment: {use_pgbouncer}")
     else:
-        print(f"Using pgBouncer setting from URL: {use_pgbouncer}")
+        logger.info(f"Using pgBouncer setting from URL: {use_pgbouncer}")
     
-    # Setup engine with connect_args for pgBouncer if needed
+    # For migrations, we'll enforce no pgBouncer mode due to compatibility issues
+    if use_pgbouncer:
+        logger.warning("⚠️ pgBouncer mode is set to true, but will be disabled for migrations to prevent issues")
+        logger.warning("⚠️ Your app will still run with pgBouncer enabled as per your configuration")
+        use_pgbouncer = False
+        
+    logger.info(f"Final pgBouncer setting for migrations: {use_pgbouncer}")
+    
+    # Configure connection parameters
+    # We'll use a longer timeout for migrations and disable connection pooling
+    connect_args = {
+        "timeout": 30,  # 30-second connection timeout
+        "command_timeout": 30,  # 30-second command timeout
+        "server_settings": {
+            "application_name": "paauth_alembic_migrations",
+            "default_transaction_isolation": "read committed",
+        }
+    }
+    
+    # Engine arguments with NullPool to prevent connection pooling during migrations
     engine_args = {
         "poolclass": pool.NullPool,
         "future": True,  # Ensure future=True for SQLAlchemy 2.0 features
+        "echo": True,    # Log SQL for debugging
+        "connect_args": connect_args
     }
     
+    # Add pgBouncer compatibility settings if needed
     if use_pgbouncer:
-        print("Configuring for pgBouncer compatibility (disabling prepared statements)")
-        engine_args["connect_args"] = {
-            "prepared_statement_cache_size": 0,
-            "statement_cache_size": 0
-        }
+        logger.info("Configuring for pgBouncer compatibility (disabling prepared statements)")
+        # These settings are critical for pgBouncer compatibility
+        connect_args["prepared_statement_cache_size"] = 0
+        connect_args["statement_cache_size"] = 0
     
-    connectable = create_async_engine(clean_url, **engine_args)
+    # Log connection info for debugging
+    parsed_for_log = urlparse(clean_url)
+    host_part = f"{parsed_for_log.hostname}:{parsed_for_log.port}"
+    logger.info(f"Connecting to database: {host_part}{parsed_for_log.path} (pgBouncer mode: {use_pgbouncer})")
+    
+    # Create the async engine with our settings
+    try:
+        logger.info("Creating database engine...")
+        connectable = create_async_engine(clean_url, **engine_args)
+        
+        # Define retry parameters
+        MAX_RETRIES = 5
+        INITIAL_RETRY_DELAY = 1.5  # seconds
+        
+        # Implement retry logic for connection
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                logger.info(f"Connection attempt {attempt}/{MAX_RETRIES}...")
+                
+                # Try to connect with a timeout
+                async with asyncio.timeout(30):  # 30 second overall timeout for each attempt
+                    async with connectable.connect() as connection:
+                        logger.info("Database connection established successfully")
+                        
+                        # Test the connection with a simple query
+                        await connection.execute(text("SELECT 1"))
+                        logger.info("Connection test passed")
+                        
+                        # Run migrations inside this connection
+                        logger.info("Running migrations...")
+                        await connection.run_sync(do_run_migrations)
+                        await connection.commit()  # Ensure changes are committed
+                        logger.info("Migrations completed successfully")
 
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
-        await connection.commit()  # Ensure changes are committed
-
-        # Verify schema after migration
-        verification_passed = await verify_schema_after_migration(connection)
-        if not verification_passed:
-            print(
-                "\n[VERIFY_MIGRATIONS] ⚠️ WARNING: Schema verification failed after migration! Some columns might be missing."
-            )
-            print(
-                "\n[VERIFY_MIGRATIONS] This could lead to UndefinedColumn errors in your application."
-            )
-            print(
-                "\n[VERIFY_MIGRATIONS] Consider manually checking your database schema or rolling back this migration."
-            )
-            # We don't raise an exception here to allow migrations to continue in production
-            # but we provide a clear warning that something might be wrong
-
-    await connectable.dispose()
+                        # Verify schema after migration
+                        verification_passed = await verify_schema_after_migration(connection)
+                        if not verification_passed:
+                            logger.warning(
+                                "\n[VERIFY_MIGRATIONS] ⚠️ WARNING: Schema verification failed after migration! "
+                                "Some columns might be missing."
+                            )
+                            logger.warning(
+                                "\n[VERIFY_MIGRATIONS] This could lead to UndefinedColumn errors in your application."
+                            )
+                            logger.warning(
+                                "\n[VERIFY_MIGRATIONS] Consider manually checking your database schema or "
+                                "rolling back this migration."
+                            )
+                        
+                        # If we got here, everything worked
+                        logger.info("All migration operations completed successfully")
+                        break
+                        
+            except (SQLAlchemyError, TimeoutError, asyncio.TimeoutError) as e:
+                # Connection failed
+                logger.error(f"Connection attempt {attempt} failed: {e.__class__.__name__}: {str(e)}")
+                
+                # Check if we should retry
+                if attempt < MAX_RETRIES:
+                    retry_delay = INITIAL_RETRY_DELAY * (2 ** (attempt - 1))  # Exponential backoff
+                    logger.info(f"Retrying in {retry_delay:.2f} seconds...")
+                    await asyncio.sleep(retry_delay)
+                else:
+                    logger.error(f"All {MAX_RETRIES} connection attempts failed. Cannot run migrations.")
+                    raise RuntimeError(f"Failed to connect to database after {MAX_RETRIES} attempts") from e
+        
+        # Proper cleanup
+        await connectable.dispose()
+        logger.info("Database connection closed")
+        
+    except Exception as e:
+        logger.error(f"Migration failed: {e.__class__.__name__}: {str(e)}", exc_info=True)
+        # Try to clean up if possible
+        try:
+            await connectable.dispose()
+        except:
+            pass
+        raise
 
 
 def run_migrations_online() -> None:

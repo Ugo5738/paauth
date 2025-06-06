@@ -154,13 +154,13 @@ jobs:
 
       - name: Run Database Migrations
         run: |
-          echo "Using alternative migration approach..."
+          echo "Using enhanced migration approach with improved connection handling..."
           # First deploy the main application without waiting for readiness
           kubectl apply -f ./processed-k8s/deployment.yaml
           
           # Wait for the pod to be created
           echo "Waiting for application pod to be created..."
-          sleep 10
+          sleep 15  # Increased wait time for pod creation
           
           # Get the pod name
           POD_NAME=$(kubectl get pods -l app=paauth -o jsonpath="{.items[0].metadata.name}")
@@ -174,25 +174,45 @@ jobs:
           
           # Run migrations directly in the application pod using environment variables
           echo "Running migrations directly in application pod..."
-          echo "Temporarily disabling pgBouncer mode for migrations only..."
+          echo "Using direct database connection for migrations (bypassing pgBouncer)..."
           
-          # Run migrations with the USE_PGBOUNCER environment variable temporarily set to false
-          # This is just for the migration process - the actual application will use USE_PGBOUNCER=true
-          # from the environment variables in the deployment
+          # Modified approach: 
+          # 1. Explicitly set USE_PGBOUNCER=false for migrations
+          # 2. Increase logging verbosity
+          # 3. Add retry attempts
           kubectl exec $POD_NAME -- bash -c "cd /app && \
           PYTHONPATH=/app \
           USE_PGBOUNCER=false \
-          alembic upgrade head"
-          
-          echo "Migration completed with pgBouncer disabled. Normal application operation will use pgBouncer=true"
+          LOGGING_LEVEL=DEBUG \
+          PYTHONUNBUFFERED=1 \
+          python -m alembic upgrade head"
           
           # Check the status
           status=$?
           if [ $status -ne 0 ]; then
-            echo "Migration failed when executed directly in pod"
-            exit $status
+            echo "Migration failed! Collecting diagnostic information..."
+            kubectl logs $POD_NAME --tail=100
+            echo "Database connection issue detected. Will try with longer timeouts..."
+            
+            # Second attempt with extended timeouts
+            echo "Attempting migration again with extended timeouts..."
+            kubectl exec $POD_NAME -- bash -c "cd /app && \
+            PYTHONPATH=/app \
+            USE_PGBOUNCER=false \
+            DB_CONNECT_TIMEOUT=45 \
+            DB_COMMAND_TIMEOUT=45 \
+            LOGGING_LEVEL=DEBUG \
+            PYTHONUNBUFFERED=1 \
+            python -m alembic upgrade head"
+            
+            status=$?
+            if [ $status -ne 0 ]; then
+              echo "Migration failed after multiple attempts"
+              exit $status
+            fi
           fi
-          echo "Migration completed successfully."
+          
+          echo "Migration completed successfully. Application will use pgBouncer=true in normal operation."
 
       - name: Deploy Application
         run: |

@@ -172,7 +172,41 @@ jobs:
           
           # Run migrations directly in the application pod
           echo "Running migrations directly in application pod..."
-          kubectl exec $POD_NAME -- bash -c "cd /app && PYTHONPATH=/app alembic upgrade head"
+          # Create a temporary modified database URL without pgbouncer parameter for migrations
+          kubectl exec $POD_NAME -- bash -c "cd /app && PYTHONPATH=/app python -c \"
+          import os
+          from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+          
+          # Get the database URL from environment
+          db_url = os.environ.get('DATABASE_URL')
+          if not db_url:
+              print('DATABASE_URL not found, checking AUTH_SERVICE_DATABASE_URL')
+              db_url = os.environ.get('AUTH_SERVICE_DATABASE_URL')
+          
+          if not db_url:
+              print('No database URL found in environment')
+              exit(1)
+          
+          print('Modifying database URL for pgBouncer compatibility')
+          
+          # Parse the URL and remove pgbouncer parameter
+          parsed = urlparse(db_url)
+          query_params = parse_qs(parsed.query)
+          
+          if 'pgbouncer' in query_params:
+              query_params.pop('pgbouncer')
+              print('Removed pgbouncer parameter from URL')
+          
+          # Rebuild URL
+          query_string = urlencode(query_params, doseq=True)
+          clean_url = urlunparse(
+              (parsed.scheme, parsed.netloc, parsed.path, parsed.params, query_string, parsed.fragment)
+          )
+          
+          # Set the cleaned URL as the environment variable for Alembic to use
+          print('Setting CLEAN_DATABASE_URL for migrations')
+          os.environ['CLEAN_DATABASE_URL'] = clean_url
+          \" && PYTHONPATH=/app SQLALCHEMY_URL=\$CLEAN_DATABASE_URL alembic upgrade head"
           
           # Check the status
           status=$?

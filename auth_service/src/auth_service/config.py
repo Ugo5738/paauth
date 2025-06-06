@@ -63,6 +63,9 @@ class Settings(BaseSettings):
     auth_service_database_url: str = Field(
         ..., json_schema_extra={"env": "AUTH_SERVICE_DATABASE_URL"}
     )
+    use_pgbouncer: bool = Field(
+        default=False, json_schema_extra={"env": "USE_PGBOUNCER"}
+    )
     root_path: str = Field("", json_schema_extra={"env": "ROOT_PATH"})
 
     # Define the fields from your .env file

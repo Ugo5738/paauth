@@ -91,19 +91,18 @@ def parse_db_url(url):
 # First clean the URL of any pgbouncer parameters
 clean_db_url = parse_db_url(settings.auth_service_database_url)
 
-# Determine if pgBouncer should be used - check both URL and environment variable
-# Environment variable takes precedence over URL parameter
-use_pgbouncer_env = os.environ.get("USE_PGBOUNCER", "").lower()
+# Check if pgbouncer=true is explicitly set in the DATABASE_URL
+has_pgbouncer_in_url = "pgbouncer=true" in settings.auth_service_database_url
 
-# Default to true if pgbouncer=true was in the URL
-is_pgbouncer = "pgbouncer=true" in settings.auth_service_database_url 
+# Use the Settings.use_pgbouncer field - properly parsed as a boolean
+use_pgbouncer_env = settings.use_pgbouncer
 
-# Override with environment variable if specified
-if use_pgbouncer_env in ("true", "false"):
-    is_pgbouncer = (use_pgbouncer_env == "true")
-    logger.info(f"pgBouncer mode set from environment variable: {is_pgbouncer}")
-else:
-    logger.info(f"pgBouncer mode detected from URL: {is_pgbouncer}")
+# Determine if we're running in pgBouncer mode
+is_pgbouncer = has_pgbouncer_in_url or use_pgbouncer_env
+
+# Log the pgBouncer mode
+if is_pgbouncer:
+    logger.info(f"Running with pgBouncer compatibility mode: {is_pgbouncer}")
 
 # Detect environment - we'll use this to enable/disable features that might not be supported in test env
 is_production = settings.is_production()
